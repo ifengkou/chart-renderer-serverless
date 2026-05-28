@@ -1,0 +1,6 @@
+name = "chart-renderer"
+main = "src/worker.js"
+compatibility_date = "2026-05-28"
+
+[vars]
+MAX_BODY_BYTES = "1000000"

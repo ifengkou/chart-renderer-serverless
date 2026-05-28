@@ -1,0 +1,551 @@
+# CHART-002 Cloudflare Worker Serverless 改造计划
+
+## Summary
+
+将 `chart-renderer` 从 Node.js PNG SSR 服务改造为 Cloudflare Worker 上的轻量图表产物服务。新服务不再在服务端生成 PNG，而是按图表复杂度返回 SVG、HTML 或标准化 config。
+
+核心判断：
+
+- Worker 适合生成轻量文本产物、做 payload 校验、hash、缓存和分发。
+- 当前 `canvas`、`@antv/gpt-vis-ssr`、PNG buffer 输出不适合 Worker 运行时。
+- PNG 生成应迁移到浏览器端下载流程，除非未来明确引入专门 WASM renderer 并严格控制复杂度。
+
+## Goals
+
+- 适配 Cloudflare Worker runtime。
+- 移除 Worker 路径中的 `canvas` 和 `@antv/gpt-vis-ssr`。
+- 将产品契约从服务端 PNG 改为：
+  - 简单图表返回 SVG。
+  - 复杂图表返回 HTML 或 config，由浏览器端渲染。
+- 使用 payload hash 作为缓存 key。
+- 支持浏览器端预览和下载 SVG、PNG、JSON config。
+
+## Decisions
+
+已确认的第一阶段决策：
+
+- 缓存只使用 Cloudflare Workers Cache API。
+- R2 不在第一阶段实现，只作为后续可选升级项保留在工程文档中。
+- `/viewer` 由 Worker 直接返回 HTML，不使用 Cloudflare Workers Static Assets。
+- 生产鉴权交给上游 API gateway，Worker 内只做输入限制、错误处理和必要的防滥用边界。
+- HTML shell 使用 `@antv/gpt-vis@0.5.5` 作为客户端复杂图表渲染库。
+
+## Non-goals
+
+- 不在 Worker 中生成 PNG。
+- 不把 `@antv/gpt-vis-ssr` 搬入 Worker。
+- 不在第一阶段重写所有复杂图表的 SVG renderer。
+- 不引入 Playwright、Puppeteer、Node canvas、Sharp、librsvg 等服务端渲染依赖。
+- 不在 Worker 内实现完整生产鉴权；生产鉴权由上游 API gateway 负责。
+
+## Product Contract
+
+### Supported Response Formats
+
+| Format | Content-Type | 生成位置 | 适用场景 |
+| --- | --- | --- | --- |
+| `svg` | `image/svg+xml; charset=utf-8` | Worker | `line`、`bar`、`column`、`pie`、`summary` 等简单图表 |
+| `html` | `text/html; charset=utf-8` | Worker 组装 shell，浏览器渲染 | 复杂图表、交互图表、需要客户端库的图表 |
+| `config` | `application/json; charset=utf-8` | Worker | 上游或浏览器自行接管渲染 |
+
+`png` 不再是服务端支持格式。收到 `response_format: "png"` 或 `Accept: image/png` 时，返回清晰错误：
+
+```json
+{
+  "error": "unsupported_response_format",
+  "message": "Server-side PNG rendering is not supported in the Worker version. Use svg/html/config and download PNG in the browser."
+}
+```
+
+建议 HTTP 状态使用 `422`。如需强调旧接口退役，也可以对明确的 legacy PNG 请求返回 `410`。
+
+### Chart Type Strategy
+
+| Chart type | 第一阶段输出 | 说明 |
+| --- | --- | --- |
+| `line` | SVG | Worker 手写 SVG path、坐标轴、标题、tooltip metadata 可选 |
+| `bar` | SVG | 横向条形图 |
+| `column` | SVG | 纵向柱状图 |
+| `pie` | SVG | 使用 path arc 生成扇区 |
+| `summary` | SVG | 从当前 canvas 卡片逻辑迁移为 SVG |
+| `area` | HTML/config | 后续可补 SVG |
+| `waterfall` | HTML/config | 第一阶段交给浏览器端图表库 |
+| `word-cloud` | HTML/config | 避免在 Worker 中做复杂布局 |
+| `liquid` | HTML/config | 动画和渐变交给浏览器端 |
+| `radar` | HTML/config | 第一阶段交给浏览器端图表库 |
+| `table` | HTML/config | 浏览器端渲染更适合文本测量和下载 |
+
+## API Design
+
+### GET /health
+
+返回 Worker 服务状态和能力描述：
+
+```json
+{
+  "status": "ok",
+  "service": "chart-renderer",
+  "version": "0.2.0",
+  "runtime": "cloudflare-worker",
+  "formats": ["svg", "html", "config"],
+  "simple_svg_types": ["line", "bar", "column", "pie", "summary"]
+}
+```
+
+### POST /render
+
+请求示例：
+
+```json
+{
+  "type": "line",
+  "data": [
+    {"time": "2026-05-01", "value": 1.12},
+    {"time": "2026-05-02", "value": 1.18}
+  ],
+  "title": "Smoke test",
+  "width": 900,
+  "height": 520,
+  "theme": "default",
+  "options": {},
+  "response_format": "svg"
+}
+```
+
+响应选择规则：
+
+1. 如果 `response_format` 是 `svg`，且 chart type 支持 SVG，返回 SVG。
+2. 如果 `response_format` 是 `config`，返回标准化 config。
+3. 如果 `response_format` 是 `html`，返回可独立预览和下载的 HTML。
+4. 如果未传 `response_format`：
+   - 简单图表默认返回 SVG。
+   - 复杂图表默认返回 HTML。
+
+SVG 响应 headers：
+
+| Header | 说明 |
+| --- | --- |
+| `Content-Type` | `image/svg+xml; charset=utf-8` |
+| `Cache-Control` | 默认 `public, max-age=31536000, immutable`，前提是 hash key 不变 |
+| `ETag` | payload hash |
+| `X-Chart-Hash` | payload hash |
+| `X-Chart-Type` | 标准化图表类型 |
+| `X-Chart-Renderer` | `worker-svg` |
+| `X-Chart-Cache` | `hit` 或 `miss` |
+
+JSON config 响应：
+
+```json
+{
+  "success": true,
+  "hash": "sha256:...",
+  "renderer": "client-config",
+  "format": "config",
+  "chart": {
+    "type": "line",
+    "data": [],
+    "title": "Smoke test",
+    "width": 900,
+    "height": 520,
+    "theme": "default",
+    "options": {}
+  },
+  "metadata": {
+    "cache": "miss"
+  }
+}
+```
+
+### GET /artifact/:hash
+
+可选接口。用于读取已缓存产物：
+
+- Cache API 命中时直接返回。
+- Cache miss 时返回 `404`。
+
+第一阶段也可以不暴露该接口，只在 `POST /render` 内做透明缓存。
+
+### GET /viewer
+
+由 Worker 直接返回 HTML 的前端入口，不使用 Cloudflare Workers Static Assets。
+
+能力：
+
+- 粘贴 payload。
+- 选择输出格式。
+- 预览 SVG 或浏览器端渲染图表。
+- 下载 `.svg`。
+- 下载 `.json` config。
+- 浏览器端导出 `.png`。
+
+## Architecture
+
+```mermaid
+flowchart TD
+  A["Client or Upstream API"] -->|"POST /render"| B["Cloudflare Worker"]
+  B --> C["Validate and normalize payload"]
+  C --> D["Stable JSON + SHA-256 hash"]
+  D --> E{"Cache hit?"}
+  E -->|yes| F["Return cached SVG/HTML/config"]
+  E -->|no| G{"Simple SVG type?"}
+  G -->|yes| H["Generate SVG in Worker"]
+  G -->|no| I["Generate HTML shell or config"]
+  H --> J["Cache API"]
+  I --> J
+  J --> K["Return response"]
+```
+
+## Code Layout
+
+建议目录：
+
+```text
+src/
+  worker.js
+  schema.js
+  hash.js
+  response.js
+  cache.js
+  renderers/
+    svg/
+      common.js
+      line.js
+      bar.js
+      column.js
+      pie.js
+      summary.js
+    client-config.js
+    html-shell.js
+  viewer/
+    index.html
+    viewer.js
+    viewer.css
+```
+
+职责：
+
+| 文件 | 职责 |
+| --- | --- |
+| `worker.js` | Worker `fetch` 入口、路由、错误处理 |
+| `schema.js` | payload 校验、type alias、theme、尺寸限制 |
+| `hash.js` | stable stringify、SHA-256 生成 |
+| `cache.js` | Cache API 读写 |
+| `renderers/svg/common.js` | SVG escaping、scale、axis、theme helper |
+| `renderers/svg/*.js` | 简单图表 SVG renderer |
+| `renderers/client-config.js` | 输出浏览器端图表配置 |
+| `renderers/html-shell.js` | 生成可预览、可下载的 HTML |
+
+## Package and Runtime Changes
+
+`package.json` 调整：
+
+- 移除 `canvas`。
+- 移除 `@antv/gpt-vis-ssr`。
+- 增加 `wrangler` 作为 dev dependency。
+- HTML shell 固定从 CDN 加载 `@antv/gpt-vis@0.5.5`。
+- 增加脚本：
+  - `dev`: `wrangler dev`
+  - `deploy`: `wrangler deploy`
+  - `smoke`: 调用 Worker 本地端口验证 SVG/config/html
+
+新增 `wrangler.toml`：
+
+```toml
+name = "chart-renderer"
+main = "src/worker.js"
+compatibility_date = "2026-05-28"
+
+[vars]
+MAX_BODY_BYTES = "1000000"
+```
+
+第一阶段不配置 `r2_buckets`。如后续启用 R2，再在 `wrangler.toml` 中增加 bucket binding。
+
+## Client Chart Library
+
+HTML shell 使用 `@antv/gpt-vis@0.5.5`。
+
+选择理由：
+
+- 最贴近当前 `@antv/gpt-vis-ssr` 的 payload 思路，复杂图表迁移成本最低。
+- 第一阶段可优先把标准化 payload 交给 GPT-Vis 客户端渲染，避免手写复杂图表 grammar。
+- 与 Worker 目标匹配：Worker 只返回 HTML/config，实际复杂渲染发生在浏览器端。
+
+备选项：
+
+| 方案 | 状态 | 取舍 |
+| --- | --- | --- |
+| `@antv/gpt-vis@0.5.5` | 采用 | 兼容现有 payload 思路，迁移最快 |
+| `@antv/g2@5.4.0` | 备选 | 更底层、更可控，但需要维护 payload 到 G2 spec 的映射 |
+| Hybrid | 暂不采用 | 灵活但复杂度和测试矩阵更高 |
+
+## Caching Plan
+
+### Hash
+
+使用标准化后的 payload 生成 hash，避免字段顺序导致缓存失效：
+
+1. normalize chart type、theme、width、height、options。
+2. 移除非渲染字段，例如 trace id、request id。
+3. 对对象 key 做稳定排序。
+4. 使用 `crypto.subtle.digest("SHA-256", bytes)`。
+5. key 形如：
+
+```text
+chart:v2:{format}:{sha256}
+```
+
+### Cache API
+
+- 适合边缘本地缓存。
+- 对同一 POP 内热点请求收益高。
+- 使用 `caches.default.match(cacheRequest)` 和 `caches.default.put(cacheRequest, response)`。
+- 缓存不可变产物时设置长期 `Cache-Control`。
+
+### Optional R2 Upgrade
+
+R2 不在第一阶段实现，只作为后续可选持久层：
+
+- 适合跨 POP 复用和长期保存。
+- key 可用 `{format}/{sha256}.{ext}`。
+- metadata 保存 chart type、width、height、renderer、created_at。
+
+如后续启用 R2，需要补充 `wrangler.toml` bucket binding、R2 读写逻辑和对应验收测试。
+
+## Browser Download Plan
+
+浏览器端下载能力放在 Worker 直接返回的 `/viewer` 中实现。调用方前端也可以复用同样逻辑。
+
+### SVG Download
+
+- Worker 返回 SVG 字符串。
+- 前端用 `Blob([svg], { type: "image/svg+xml" })` 创建下载链接。
+
+### Config Download
+
+- 将标准化 config 序列化为 JSON。
+- 下载为 `{hash}.json`。
+
+### PNG Download
+
+推荐浏览器端路径：
+
+1. SVG 简单图表：
+   - 将 SVG 放入 `Image`。
+   - 绘制到 `<canvas>`。
+   - `canvas.toBlob("image/png")` 下载。
+2. HTML/client-rendered 复杂图表：
+   - 优先使用图表库自带导出能力。
+   - 或使用 `html-to-image` / `dom-to-image-more` 一类浏览器端工具。
+
+注意：
+
+- PNG 导出发生在用户浏览器，不占用 Worker CPU。
+- 如有跨域图片或字体，需确保 CORS 和字体加载策略正确，否则 canvas 会 taint。
+
+## Security and Limits
+
+- 限制请求体大小，默认 `1 MB`。
+- 限制 `width`、`height`，建议 `100..4096`。
+- 限制 `data.length`，简单 SVG 第一阶段建议不超过 `1000` 点。
+- 对所有 SVG 文本做 XML escaping。
+- 禁止将用户输入直接拼入 `<script>`，HTML shell 中 config 使用 JSON script tag 或安全序列化。
+- 生产鉴权由上游 API gateway 负责；Worker 不实现业务鉴权。
+- 对 Cache key 只使用 hash，不使用原始 title 或用户文本。
+
+## Migration Phases
+
+### Phase 1: Worker Skeleton and Contract
+
+状态：已实现。
+
+- 新增 `src/worker.js` 和 `wrangler.toml`。
+- `package.json` 增加 `dev` 和 `deploy` 脚本，`dev` 运行 `wrangler dev`。
+- 迁移 payload 校验逻辑：
+  - payload 必须是 JSON object。
+  - `type` 必填。
+  - `options` 必须是 object。
+  - `theme` 支持 `default`、`dark`、`academy`，`light` 归一化为 `default`。
+  - `width`、`height` 范围为 `100..4096`。
+  - 除 `liquid` 外，`data` 必须是非空数组。
+  - `liquid` 需要 `percent` 或 `options.percent`，范围 `0..1`。
+- 实现 `GET /health`，返回 Worker runtime、当前已实现格式和后续计划格式。
+- 实现 `POST /render` 的 `config` 响应：
+  - 默认 `response_format` 为 `config`。
+  - 返回标准化 `chart` config、`sha256` hash、`renderer: "client-config"` 和 metadata。
+  - 响应头返回 `ETag`、`X-Chart-Hash`、`X-Chart-Type`、`X-Chart-Renderer`、`X-Chart-Cache`。
+- 对 `png` 请求返回 `422 unsupported_response_format`。
+- 对 `svg` 和 `html` 请求返回 `501 response_format_not_implemented`，避免未完成能力被误用。
+- 更新 API 文档，标记 PNG SSR 为 legacy。
+
+验收：
+
+- `wrangler dev` 可启动。
+- `GET /health` 正常。
+- `POST /render response_format=config` 正常。
+- `response_format=png` 返回预期错误。
+
+### Phase 2: Simple SVG Renderers
+
+状态：已实现。
+
+- 新增 Worker SVG renderer，支持 `line`、`bar`、`column`、`pie`、`summary`。
+- `response_format: "svg"` 对简单图表返回 `image/svg+xml; charset=utf-8`。
+- SVG 响应包含 `ETag`、`X-Chart-Hash`、`X-Chart-Type`、`X-Chart-Renderer: worker-svg`、`X-Chart-Cache`。
+- 复杂图表请求 SVG 时返回 `422 unsupported_svg_chart_type`，提示改用 `config` 或后续 `html`。
+- 所有 SVG 用户文本做 XML escaping，避免标题、类目、摘要文本中的 `<`、`>`、`&` 破坏 SVG。
+- 增加 `npm run svg:smoke` 字符串结构测试，覆盖 5 种 SVG 类型。
+
+验收：
+
+- 简单图表返回非空 SVG。
+- SVG 包含合法 `<svg>`、`viewBox`、title、主要图形节点。
+- 特殊字符不会破坏 SVG。
+
+### Phase 3: HTML Shell and Viewer
+
+状态：已实现。
+
+- 实现复杂图表 HTML shell，`response_format: "html"` 返回 `text/html; charset=utf-8`。
+- HTML shell 引入 `@antv/gpt-vis@0.5.5` UMD 浏览器脚本，并用 `vis-chart` markdown block 渲染图表。
+- 对 GPT-Vis 默认组件不支持或 CDN 加载失败的场景，提供内置浏览器 fallback renderer，已覆盖 `radar`。
+- 提供 JSON、SVG、PNG 下载能力：
+  - JSON 下载当前标准化 config。
+  - SVG 优先序列化当前页面内真正的图表 SVG；简单图表也可请求 Worker SVG；复杂 canvas 图表导出为包含 canvas PNG data URL 的 SVG 包装。
+  - PNG 优先导出当前图表 canvas，或把当前 SVG rasterize 到 browser canvas；非 SVG DOM 可走 `html-to-image`。
+- 预览区域按 chart `width`、`height` 动态设置最小尺寸，避免大图表被截断。
+- 覆盖 GPT-Vis 内部 300px 容器高度限制，并在渲染后按 canvas 父级链路补写高度，避免 styled-component class 变化导致图表被裁切。
+- `/viewer` 提供 Theme 下拉选择，选择值同步到 payload 的 `theme` 后重新渲染。
+- 浏览器端渲染复杂图表时保留 Worker config 的 `theme`，但传给 `@antv/gpt-vis@0.5.5` 前移除 theme 字段，避免 GPT-Vis 报 `Unknown Component: theme.*`；预览容器和 fallback renderer 自行应用主题。
+- 增加由 Worker 直接返回的 `/viewer`，支持编辑 payload、请求 config/svg/html、预览和下载。
+
+验收：
+
+- 复杂图表可以在浏览器端渲染。
+- SVG 和 config 可下载。
+- PNG 可在浏览器端导出。
+
+### Phase 4: Cache API - Implemented
+
+- 实现 stable hash。
+- 实现 Cache API match/put。
+- 增加 `ETag`、`X-Chart-Hash`、`X-Chart-Cache`。
+
+实现说明：
+
+- hash 输入为标准化 chart config，而不是原始请求字符串。
+- `stableStringify` 对 object key 排序，对 array 保持顺序，因此字段顺序不同但语义等价的 payload 会得到相同 hash。
+- Cache API key 为 `/{origin}/__chart-cache/{cache_namespace}/{format}/{hash}`，避免把用户 title 或其他原文放入 cache URL；`cache_namespace` 用于 renderer、下载逻辑或 HTML shell 变更后的缓存隔离。
+- miss 时生成 SVG/HTML/config，并写入 `caches.default.put()`；hit 时直接返回缓存产物。
+- 当前仅使用 Workers Cache API；R2 仍保留为后续可选升级。
+
+验收：
+
+- 同一 payload 第二次请求返回 `X-Chart-Cache: hit`。
+- 不同字段顺序的等价 payload 命中同一 hash。
+
+### Phase 5: Optional R2 Persistence Documentation
+
+- 不实现 R2 代码。
+- 在工程文档中保留 R2 后续升级方案。
+- 记录需要新增的 binding、key 设计、metadata 和验收思路。
+
+验收：
+
+- 第一阶段代码和 `wrangler.toml` 不包含 R2 binding。
+- 文档明确 R2 是后续可选升级，不影响 Cache API-only 交付。
+
+### Phase 6: Legacy Cleanup
+
+- 删除或隔离 Node SSR 入口。
+- 移除 Dockerfile 和 docker-compose，或移到 `legacy/`。
+- 移除 `canvas`、`@antv/gpt-vis-ssr`、相关 lockfile 依赖。
+- 更新 README、API 文档、部署文档。
+
+验收：
+
+- 全量安装不再编译 native canvas。
+- Worker bundle 不包含 Node-only 依赖。
+- 文档中不再把 PNG SSR 描述为当前默认能力。
+
+## Test Plan
+
+本地 Worker：
+
+```bash
+npm install
+npm run dev
+```
+
+健康检查：
+
+```bash
+curl -s http://127.0.0.1:8787/health
+```
+
+SVG：
+
+```bash
+curl -s -X POST http://127.0.0.1:8787/render \
+  -H "Content-Type: application/json" \
+  -d '{"type":"line","response_format":"svg","data":[{"time":"2026-05-01","value":1.12},{"time":"2026-05-02","value":1.18}],"title":"Smoke test"}' \
+  -o /tmp/chart-renderer-line.svg
+```
+
+Config：
+
+```bash
+curl -s -X POST http://127.0.0.1:8787/render \
+  -H "Content-Type: application/json" \
+  -d '{"type":"radar","response_format":"config","data":[{"name":"A","value":10}]}'
+```
+
+HTML：
+
+```bash
+curl -s -X POST http://127.0.0.1:8787/render \
+  -H "Content-Type: application/json" \
+  -d '{"type":"waterfall","response_format":"html","data":[{"category":"Start","value":100},{"category":"Cost","value":-20}]}' \
+  -o /tmp/chart-renderer-waterfall.html
+```
+
+PNG legacy 错误：
+
+```bash
+curl -s -X POST http://127.0.0.1:8787/render \
+  -H "Content-Type: application/json" \
+  -d '{"type":"line","response_format":"png","data":[{"time":"2026-05-01","value":1.12}]}'
+```
+
+缓存：
+
+```bash
+curl -i -s -X POST http://127.0.0.1:8787/render \
+  -H "Content-Type: application/json" \
+  -d '{"type":"line","response_format":"svg","data":[{"time":"2026-05-01","value":1.12}]}'
+```
+
+连续请求同一 payload，验证第二次 `X-Chart-Cache: hit`。
+
+## Acceptance Criteria
+
+- Worker 可以在 `wrangler dev` 下运行。
+- 部署包不包含 native canvas 或 Node-only SSR renderer。
+- `/health` 返回 Worker runtime metadata。
+- `/render` 支持 `svg`、`html`、`config`。
+- `/render` 不支持服务端 `png`，且错误信息清晰。
+- `line`、`bar`、`column`、`pie`、`summary` 可返回 SVG。
+- 复杂图表可返回 HTML 或 config，并能在浏览器端渲染。
+- 浏览器端可以下载 SVG、PNG、JSON config。
+- payload hash 稳定，相同规范化 payload 命中缓存。
+- 第一阶段只使用 Cache API，不包含 R2 binding 或 R2 读写代码。
+- `/viewer` 由 Worker 直接返回。
+- HTML shell 使用 `@antv/gpt-vis@0.5.5`。
+- 生产鉴权边界明确归属上游 API gateway。
+- 文档清楚标明 CHART-001 Node PNG SSR 是 legacy，CHART-002 Worker 是当前目标方案。
+
+## Deferred Upgrades
+
+- R2 持久化：后续如需要跨 POP 复用和长期保存，再增加 R2 binding、读写逻辑和 `GET /artifact/:hash` 回源路径。
+- G2 客户端渲染：如 `@antv/gpt-vis@0.5.5` 无法满足某些复杂图表控制需求，再评估 `@antv/g2@5.4.0` 或 Hybrid 方案。
+- Worker 内鉴权：除非上游 API gateway 无法覆盖部署链路，否则不在 Worker 内实现业务鉴权。

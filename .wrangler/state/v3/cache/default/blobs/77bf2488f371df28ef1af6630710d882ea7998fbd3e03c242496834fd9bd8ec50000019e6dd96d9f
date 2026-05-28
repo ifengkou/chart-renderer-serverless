@@ -1,0 +1,1 @@
+{"success":true,"hash":"sha256:6cb0ab3be375f872346b7ad3776dbc67a5741f80aa2a002f44c15c78f18796b7","renderer":"client-config","format":"config","chart":{"type":"line","width":900,"height":520,"theme":"default","options":{},"data":[{"time":"2026-05-01","value":1.12},{"time":"2026-05-02","value":1.18}],"title":"Smoke test"},"metadata":{"cache":"hit","runtime":"cloudflare-worker"}}

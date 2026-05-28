@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" viewBox="0 0 900 620" width="900" height="620">
+  <title>Dark line</title>
+  <rect width="100%" height="100%" fill="#0b0f17"/>
+  <text data-chart-node="title" x="96" y="40" font-size="24" font-weight="700" fill="#f8fafc">Dark line</text>
+  <line data-chart-node="grid-line" x1="96" y1="72" x2="852" y2="72" stroke="#263247" stroke-width="1"/><line data-chart-node="grid-line" x1="96" y1="194.5" x2="852" y2="194.5" stroke="#263247" stroke-width="1"/><line data-chart-node="grid-line" x1="96" y1="317" x2="852" y2="317" stroke="#263247" stroke-width="1"/><line data-chart-node="grid-line" x1="96" y1="439.5" x2="852" y2="439.5" stroke="#263247" stroke-width="1"/><line data-chart-node="grid-line" x1="96" y1="562" x2="852" y2="562" stroke="#263247" stroke-width="1"/>
+  <g data-chart-node="axes"><line x1="96" y1="562" x2="852" y2="562" stroke="#263247"/><line x1="96" y1="72" x2="96" y2="562" stroke="#263247"/></g>
+  <path data-chart-node="line-path" d="M 96 359.24 L 474 105.79 L 852 528.21" fill="none" stroke="#2563eb" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle data-chart-node="line-point" cx="96" cy="359.24" r="4" fill="#2563eb"><title>2026-05-01: 1.12</title></circle>
+  <circle data-chart-node="line-point" cx="474" cy="105.79" r="4" fill="#2563eb"><title>2026-05-02: 1.18</title></circle>
+  <circle data-chart-node="line-point" cx="852" cy="528.21" r="4" fill="#2563eb"><title>2026-05-03: 1.08</title></circle>
+  <text data-chart-node="x-label" x="96" y="584" text-anchor="middle" font-size="12" fill="#a7b0c0">2026-05-01</text><text data-chart-node="x-label" x="474" y="584" text-anchor="middle" font-size="12" fill="#a7b0c0">2026-05-02</text><text data-chart-node="x-label" x="852" y="584" text-anchor="middle" font-size="12" fill="#a7b0c0">2026-05-03</text>
+  <text data-chart-node="y-label" x="84" y="562" text-anchor="end" font-size="12" fill="#a7b0c0">1.07</text><text data-chart-node="y-label" x="84" y="76" text-anchor="end" font-size="12" fill="#a7b0c0">1.19</text>
+</svg>

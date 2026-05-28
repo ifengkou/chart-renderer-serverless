@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>waterfall chart</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f5f7fb;
+      color: #111827;
+    }
+    .shell {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      padding: 18px 24px;
+      border-bottom: 1px solid #d9e1ec;
+      background: #ffffff;
+    }
+    .eyebrow {
+      margin: 0 0 2px;
+      color: #667085;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    h1 {
+      margin: 0;
+      font-size: 22px;
+      line-height: 1.2;
+    }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+    button {
+      min-width: 70px;
+      height: 34px;
+      border: 1px solid #c9d4e5;
+      border-radius: 6px;
+      background: #ffffff;
+      color: #111827;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    button:hover { background: #f1f5f9; }
+    .workspace {
+      flex: 1;
+      display: grid;
+      grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
+      min-height: 0;
+    }
+    .editor-panel {
+      display: grid;
+      grid-template-rows: minmax(260px, 1fr) 180px;
+      gap: 12px;
+      padding: 16px;
+      border-right: 1px solid #d9e1ec;
+      background: #ffffff;
+      min-height: 0;
+    }
+    textarea,
+    .result-output {
+      width: 100%;
+      margin: 0;
+      padding: 12px;
+      border: 1px solid #c9d4e5;
+      border-radius: 6px;
+      background: #fbfdff;
+      font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      color: #111827;
+      resize: none;
+      overflow: auto;
+    }
+    .preview-wrap {
+      flex: 1;
+      min-height: 0;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .status {
+      min-height: 24px;
+      color: #667085;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .chart-root {
+      flex: 1;
+      min-height: 420px;
+      background: #ffffff;
+      border: 1px solid #d9e1ec;
+      border-radius: 8px;
+      padding: 18px;
+      overflow: auto;
+    }
+    .chart-root > svg {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+    .shell-single .chart-root {
+      min-height: 520px;
+    }
+    @media (max-width: 860px) {
+      .topbar { align-items: flex-start; flex-direction: column; }
+      .actions { justify-content: flex-start; }
+      .workspace { grid-template-columns: 1fr; }
+      .editor-panel { border-right: 0; border-bottom: 1px solid #d9e1ec; }
+    }
+  </style>
+</head>
+<body>
+  
+      <main class="shell shell-single">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">chart-renderer</p>
+            <h1>waterfall chart</h1>
+          </div>
+          <div class="actions">
+            <button id="download-json" type="button">JSON</button>
+            <button id="download-svg" type="button">SVG</button>
+            <button id="download-png" type="button">PNG</button>
+          </div>
+        </header>
+        <section class="preview-wrap">
+          <div id="status" class="status">Rendering...</div>
+          <div id="chart-root" class="chart-root" aria-live="polite"></div>
+        </section>
+      </main>
+    
+  <script id="chart-state" type="application/json">{"mode":"single","chart":{"type":"waterfall","width":900,"height":520,"theme":"default","options":{},"data":[{"category":"Start","value":100},{"category":"Cost","value":-20}]},"hash":"sha256:210d51ec710a1dea66f742dd66fa9b13cf85163f99c0cab3bf4396d8f5df3b63","endpoint":"/render","gptVisVersion":"0.5.5"}</script>
+  <script src="https://cdn.jsdelivr.net/npm/lodash@4/lodash.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@antv/gpt-vis@0.5.5/dist/umd/index.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.min.js"></script>
+  <script>
+    const state = JSON.parse(document.getElementById("chart-state").textContent);
+    const endpoint = state.endpoint || "/render";
+    const chartRoot = document.getElementById("chart-root");
+    const statusEl = document.getElementById("status");
+    const payloadInput = document.getElementById("payload-input");
+    const resultOutput = document.getElementById("result-output");
+    let currentConfig = state.chart || null;
+    let currentPayload = state.payload || state.chart || null;
+    let currentSvg = "";
+    let currentHash = state.hash || "";
+
+    function setStatus(message) {
+      statusEl.textContent = message;
+    }
+
+    function toMarkdown(chart) {
+      return "\n\`\`\`vis-chart\n" + JSON.stringify(chart, null, 2) + "\n\`\`\`\n";
+    }
+
+    function renderGptVis(chart) {
+      currentConfig = chart;
+      currentSvg = "";
+      chartRoot.innerHTML = "";
+      if (!window.React || !window.ReactDOM || !window.GPTVis) {
+        renderFallbackChart(chart);
+        setStatus("Rendered with built-in browser fallback; @antv/gpt-vis could not be loaded.");
+        return;
+      }
+      const Component = createGptVisComponent(window.GPTVis);
+      const root = window.ReactDOM.createRoot(chartRoot);
+      root.render(window.React.createElement(Component, null, toMarkdown(chart)));
+      setStatus("Rendered with @antv/gpt-vis@" + state.gptVisVersion);
+      window.setTimeout(() => {
+        if (/not supported/i.test(chartRoot.textContent || "")) {
+          renderFallbackChart(chart);
+          setStatus("Rendered with built-in browser fallback after GPT-Vis reported an unsupported chart type.");
+        }
+      }, 300);
+    }
+
+    function createGptVisComponent(gptVis) {
+      if (gptVis.GPTVisLite && gptVis.withChartCode) {
+        const chartType = gptVis.ChartType || {};
+        const pairs = [
+          [chartType.Line || "line", gptVis.Line],
+          [chartType.Column || "column", gptVis.Column],
+          [chartType.Pie || "pie", gptVis.Pie],
+          [chartType.Bar || "bar", gptVis.Bar],
+          [chartType.Area || "area", gptVis.Area],
+          [chartType.Radar || "radar", gptVis.Radar],
+          [chartType.WordCloud || "word-cloud", gptVis.WordCloud],
+          [chartType.Treemap || "treemap", gptVis.Treemap],
+          [chartType.DualAxes || "dual-axes", gptVis.DualAxes],
+          [chartType.Scatter || "scatter", gptVis.Scatter],
+          [chartType.Histogram || "histogram", gptVis.Histogram],
+          [chartType.FlowDiagram || "flow-diagram", gptVis.FlowDiagram],
+          [chartType.FishboneDiagram || "fishbone-diagram", gptVis.FishboneDiagram],
+          [chartType.MindMap || "mind-map", gptVis.MindMap],
+          [chartType.NetworkGraph || "network-graph", gptVis.NetworkGraph]
+        ];
+        const components = {};
+        for (const [type, component] of pairs) {
+          if (type && component) components[type] = component;
+        }
+        const renderers = {
+          code: gptVis.withChartCode({ components })
+        };
+        return function ShellGptVisLite(props) {
+          return window.React.createElement(gptVis.GPTVisLite, { components: renderers }, props.children);
+        };
+      }
+      return gptVis.GPTVis || gptVis.default || gptVis;
+    }
+
+    function renderFallbackChart(chart) {
+      if (chart.type === "radar") {
+        renderFallbackRadar(chart);
+        return;
+      }
+      chartRoot.innerHTML =
+        '<div class="fallback-card"><h2>' + escapeHtml(chart.title || chart.type + ' chart') + '</h2><pre>' +
+        escapeHtml(JSON.stringify(chart, null, 2)) +
+        '</pre></div>';
+    }
+
+    function renderFallbackRadar(chart) {
+      const data = Array.isArray(chart.data) ? chart.data : [];
+      const groups = [...new Set(data.map((item) => item.group || "Series"))];
+      const names = [...new Set(data.map((item) => item.name || item.category || item.label || "Metric"))];
+      const width = chart.width || 900;
+      const height = chart.height || 520;
+      const cx = width / 2;
+      const cy = height / 2 + 16;
+      const radius = Math.min(width, height) * 0.32;
+      const max = Math.max(...data.map((item) => Number(item.value) || 0), 1);
+      const palette = ["#2563eb", "#16a34a", "#dc2626", "#9333ea"];
+      const point = (nameIndex, value) => {
+        const angle = -Math.PI / 2 + (Math.PI * 2 * nameIndex) / Math.max(1, names.length);
+        const r = radius * ((Number(value) || 0) / max);
+        return [cx + Math.cos(angle) * r, cy + Math.sin(angle) * r];
+      };
+      const axis = names.map((name, index) => {
+        const [x, y] = point(index, max);
+        return '<line x1="' + cx + '" y1="' + cy + '" x2="' + x + '" y2="' + y + '" stroke="#d9e1ec"/>' +
+          '<text x="' + x + '" y="' + y + '" font-size="12" fill="#667085">' + escapeHtml(name) + '</text>';
+      }).join("");
+      const polygons = groups.map((group, groupIndex) => {
+        const points = names.map((name, nameIndex) => {
+          const row = data.find((item) => (item.group || "Series") === group && (item.name || item.category || item.label || "Metric") === name);
+          return point(nameIndex, row ? row.value : 0).map((n) => Math.round(n * 100) / 100).join(",");
+        }).join(" ");
+        const color = palette[groupIndex % palette.length];
+        return '<polygon data-chart-node="fallback-radar" points="' + points + '" fill="' + color + '22" stroke="' + color + '" stroke-width="3"/>' +
+          '<text x="24" y="' + (34 + groupIndex * 22) + '" font-size="13" fill="' + color + '">' + escapeHtml(group) + '</text>';
+      }).join("");
+      currentSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + width + ' ' + height + '" width="' + width + '" height="' + height + '">' +
+        '<title>' + escapeHtml(chart.title || "Radar chart") + '</title><rect width="100%" height="100%" fill="#ffffff"/>' +
+        '<text x="24" y="28" font-size="22" font-weight="700" fill="#111827">' + escapeHtml(chart.title || "Radar chart") + '</text>' +
+        axis + polygons + '</svg>';
+      chartRoot.innerHTML = currentSvg;
+    }
+
+    function renderSvg(svg) {
+      currentSvg = svg;
+      chartRoot.innerHTML = svg;
+      setStatus("Rendered SVG");
+    }
+
+    async function renderPayload(format) {
+      const payload = payloadInput ? JSON.parse(payloadInput.value) : { ...currentConfig };
+      payload.response_format = format;
+      currentPayload = payload;
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const contentType = response.headers.get("content-type") || "";
+      currentHash = response.headers.get("x-chart-hash") || currentHash;
+      if (contentType.includes("image/svg+xml")) {
+        const svg = await response.text();
+        renderSvg(svg);
+        if (resultOutput) resultOutput.textContent = svg.slice(0, 2000);
+        return;
+      }
+      if (contentType.includes("text/html")) {
+        const html = await response.text();
+        chartRoot.innerHTML = '<iframe title="Rendered HTML chart" style="width:100%;height:100%;min-height:520px;border:0;" srcdoc="' + escapeAttribute(html) + '"></iframe>';
+        currentSvg = "";
+        if (resultOutput) resultOutput.textContent = html.slice(0, 2000);
+        setStatus("Rendered HTML shell");
+        return;
+      }
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || data.error || "Render failed");
+      }
+      if (data.format === "config") {
+        currentConfig = data.chart;
+        currentHash = data.hash || currentHash;
+        renderGptVis(data.chart);
+        if (resultOutput) resultOutput.textContent = JSON.stringify(data, null, 2);
+      }
+    }
+
+    function downloadBlob(filename, type, content) {
+      const blob = new Blob([content], { type });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    async function downloadSvg() {
+      const embeddedSvg = chartRoot.querySelector("svg");
+      if (!currentSvg && embeddedSvg) {
+        currentSvg = new XMLSerializer().serializeToString(embeddedSvg);
+      }
+      if (!currentSvg) {
+        const payload = { ...(currentPayload || currentConfig), response_format: "svg" };
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        if (!response.ok) throw new Error("Current chart is not available as Worker SVG.");
+        currentSvg = await response.text();
+      }
+      downloadBlob((currentHash || "chart") + ".svg", "image/svg+xml", currentSvg);
+    }
+
+    function downloadJson() {
+      const content = JSON.stringify(currentConfig || currentPayload, null, 2);
+      downloadBlob((currentHash || "chart") + ".json", "application/json", content);
+    }
+
+    async function downloadPng() {
+      const embeddedSvg = chartRoot.querySelector("svg");
+      if (!currentSvg && embeddedSvg) {
+        currentSvg = new XMLSerializer().serializeToString(embeddedSvg);
+      }
+      if (currentSvg) {
+        const image = new Image();
+        const svgBlob = new Blob([currentSvg], { type: "image/svg+xml" });
+        const url = URL.createObjectURL(svgBlob);
+        await new Promise((resolve, reject) => {
+          image.onload = resolve;
+          image.onerror = reject;
+          image.src = url;
+        });
+        const canvas = document.createElement("canvas");
+        canvas.width = image.naturalWidth || 900;
+        canvas.height = image.naturalHeight || 520;
+        canvas.getContext("2d").drawImage(image, 0, 0);
+        URL.revokeObjectURL(url);
+        const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+        const pngUrl = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = pngUrl;
+        link.download = (currentHash || "chart") + ".png";
+        link.click();
+        URL.revokeObjectURL(pngUrl);
+        return;
+      }
+      if (!window.htmlToImage) throw new Error("PNG export library failed to load.");
+      const blob = await window.htmlToImage.toBlob(chartRoot, { backgroundColor: "#ffffff" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = (currentHash || "chart") + ".png";
+      link.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+    }
+
+    function escapeAttribute(value) {
+      return escapeHtml(value).replaceAll("`", "&#96;");
+    }
+
+    async function safeRun(task) {
+      try {
+        setStatus("Working...");
+        await task();
+      } catch (error) {
+        setStatus(error.message || String(error));
+      }
+    }
+
+    if (payloadInput) {
+      payloadInput.value = JSON.stringify(state.payload, null, 2);
+      document.getElementById("render-config").addEventListener("click", () => safeRun(() => renderPayload("config")));
+      document.getElementById("render-svg").addEventListener("click", () => safeRun(() => renderPayload("svg")));
+      document.getElementById("render-html").addEventListener("click", () => safeRun(() => renderPayload("html")));
+    }
+    document.getElementById("download-json").addEventListener("click", () => safeRun(downloadJson));
+    document.getElementById("download-svg").addEventListener("click", () => safeRun(downloadSvg));
+    document.getElementById("download-png").addEventListener("click", () => safeRun(downloadPng));
+
+    if (state.mode === "single") {
+      renderGptVis(state.chart);
+    } else {
+      renderPayload("config");
+    }
+  </script>
+</body>
+</html>
