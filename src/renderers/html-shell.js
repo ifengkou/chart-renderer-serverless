@@ -1,7 +1,7 @@
-const GPT_VIS_VERSION = "0.5.7";
+const GPT_VIS_VERSION = "0.6.1";
 const REACT_VERSION = "18";
 const HTML_TO_IMAGE_VERSION = "1.11.11";
-const CACHE_BUSTER = "viewer-v5";
+const CACHE_BUSTER = "viewer-v9";
 
 export function renderChartHtml(chart, hash) {
   const title = chart.title || `${chart.type} chart`;
@@ -96,6 +96,8 @@ export function renderViewerHtml() {
               <input id="width-input" type="number" min="100" max="4096" step="10" value="900">
               <label for="height-input">H</label>
               <input id="height-input" type="number" min="100" max="4096" step="10" value="520">
+              <span></span>
+              <button id="apply-controls" type="button">Apply</button>
             </div>
             <textarea id="payload-input" spellcheck="false"></textarea>
             <pre id="result-output" class="result-output"></pre>
@@ -228,6 +230,10 @@ function viewerCss() {
       width: 100%;
       padding: 0 8px;
     }
+    #apply-controls {
+      width: 100%;
+      min-width: 0;
+    }
     textarea,
     .result-output {
       width: 100%;
@@ -268,27 +274,37 @@ function viewerCss() {
     }
     .chart-root > pre {
       min-width: var(--chart-width, 900px);
+      width: var(--chart-width, 900px);
       margin: 0;
       font-family: inherit;
       white-space: normal;
     }
     .chart-root > svg {
-      width: 100%;
+      width: auto;
       height: auto;
       display: block;
+      max-width: none;
     }
     .chart-root canvas {
       display: block;
       max-width: none;
     }
-    .chart-root [class*="gpt-vis"],
-    .chart-root [class*="__sc-"],
-    .chart-root [class*="-gpt-vis-"] {
+    .chart-root [class*="TabContainer-gpt-vis"],
+    .chart-root [class*="TabContent-gpt-vis"],
+    .chart-root [class*="StyledGPTVis-gpt-vis"],
+    .chart-root [class*="ChartWrapper-gpt-vis"] {
+      width: var(--chart-width, 900px) !important;
+      min-width: var(--chart-width, 900px) !important;
+      min-height: var(--chart-inner-height, 520px) !important;
       max-height: none !important;
     }
-    .chart-root .dESCVp {
-      height: var(--chart-inner-height, 700px) !important;
-      min-height: var(--chart-inner-height, 700px) !important;
+    .chart-root [class*="StyledGPTVis-gpt-vis"],
+    .chart-root [class*="ChartWrapper-gpt-vis"] {
+      height: var(--chart-inner-height, 520px) !important;
+    }
+    .chart-root [class*="ChartWrapper-gpt-vis"] > div {
+      width: 100% !important;
+      height: 100% !important;
     }
     .chart-root iframe {
       width: 100%;
@@ -318,6 +334,8 @@ function viewerJs() {
     const themeSelect = document.getElementById("theme-select");
     const widthInput = document.getElementById("width-input");
     const heightInput = document.getElementById("height-input");
+    const applyControls = document.getElementById("apply-controls");
+    const controlRow = document.querySelector(".control-row");
     const resultOutput = document.getElementById("result-output");
     let currentConfig = state.chart || null;
     let currentPayload = state.payload || state.chart || null;
@@ -325,8 +343,8 @@ function viewerJs() {
     let currentHtml = "";
     let currentHash = state.hash || "";
     let currentFormat = "config";
-    let sizeRenderTimer = null;
     let pendingGptVisChart = null;
+    let currentReactRoot = null;
     const themeColors = {
       default: { background: "#ffffff", border: "#d9e1ec", text: "#111827", muted: "#667085", grid: "#d9e1ec" },
       dark: { background: "#0b0f17", border: "#263247", text: "#f8fafc", muted: "#a7b0c0", grid: "#263247" },
@@ -347,6 +365,10 @@ function viewerJs() {
       currentHtml = "";
       pendingGptVisChart = chart;
       prepareChartFrame(chart);
+      if (currentReactRoot) {
+        currentReactRoot.unmount();
+        currentReactRoot = null;
+      }
       chartRoot.innerHTML = "";
       if (!window.React || !window.ReactDOM || !window.GPTVis) {
         renderFallbackChart(chart);
@@ -354,11 +376,11 @@ function viewerJs() {
         return;
       }
       const Component = createGptVisComponent(window.GPTVis);
-      const root = window.ReactDOM.createRoot(chartRoot);
-      root.render(window.React.createElement(Component, null, toMarkdown(toGptVisChart(chart))));
+      currentReactRoot = window.ReactDOM.createRoot(chartRoot);
+      currentReactRoot.render(window.React.createElement(Component, { key: chartRenderKey(chart) }, toMarkdown(toGptVisChart(chart))));
       setStatus("Rendered with @antv/gpt-vis@" + state.gptVisVersion);
-      window.setTimeout(() => adjustGptVisHeight(chart), 100);
-      window.setTimeout(() => adjustGptVisHeight(chart), 500);
+      bindGptVisTabResize();
+      scheduleChartResize(chart);
       window.setTimeout(() => {
         if (/not supported/i.test(chartRoot.textContent || "")) {
           renderFallbackChart(chart);
@@ -403,7 +425,18 @@ function viewerJs() {
 
     function toGptVisChart(chart) {
       const next = JSON.parse(JSON.stringify(chart));
+      const { width, height } = chartSize(next);
+      next.width = width;
+      next.height = height;
+      next.autoFit = false;
+      next.containerStyle = { ...(next.containerStyle || {}), width: width + "px", height: height + "px" };
+      next.options = { ...(next.options || {}), width, height, autoFit: false, containerStyle: next.containerStyle };
       return next;
+    }
+
+    function chartRenderKey(chart) {
+      const { width, height } = chartSize(chart);
+      return [chart?.type || "", chartTheme(chart), width, height, currentHash || ""].join(":");
     }
 
     function chartTheme(chart) {
@@ -412,32 +445,45 @@ function viewerJs() {
     }
 
     function prepareChartFrame(chart) {
-      const width = Number(chart?.width) || 900;
-      const height = Number(chart?.height) || 520;
+      const { width, height } = chartSize(chart);
       chartRoot.dataset.theme = chartTheme(chart);
       chartRoot.style.setProperty("--chart-width", width + "px");
       chartRoot.style.setProperty("--chart-frame-height", Math.max(700, height + 180) + "px");
-      chartRoot.style.setProperty("--chart-inner-height", Math.max(520, height) + "px");
+      chartRoot.style.setProperty("--chart-inner-height", height + "px");
       chartRoot.style.minHeight = Math.max(640, height + 180) + "px";
     }
 
-    function adjustGptVisHeight(chart) {
-      const height = Math.max(520, Number(chart?.height) || 520);
-      const canvas = findRenderableCanvas(chartRoot);
-      if (!canvas) return;
-      let node = canvas.parentElement;
-      while (node && node !== chartRoot) {
-        const box = node.getBoundingClientRect();
-        if (box.height <= 340 || /dESCVp/.test(node.className || "")) {
-          node.style.height = height + "px";
-          node.style.minHeight = height + "px";
-          node.style.maxHeight = "none";
+    function scheduleChartResize(chart = currentConfig) {
+      if (chart) prepareChartFrame(chart);
+      chartRoot.classList.add("chart-resizing");
+      const fireResize = () => {
+        window.dispatchEvent(new Event("resize"));
+        chartRoot.classList.remove("chart-resizing");
+      };
+      window.requestAnimationFrame(() => {
+        fireResize();
+        window.setTimeout(fireResize, 250);
+      });
+    }
+
+    function bindGptVisTabResize() {
+      if (chartRoot.dataset.tabResizeBound === "true") return;
+      chartRoot.dataset.tabResizeBound = "true";
+      chartRoot.addEventListener("click", (event) => {
+        const button = event.target.closest?.("button");
+        const label = (button?.textContent || "").trim().toLowerCase();
+        if (label === "图表" || label === "chart") {
+          window.setTimeout(() => scheduleChartResize(currentConfig), 50);
+          window.setTimeout(() => scheduleChartResize(currentConfig), 300);
         }
-        node = node.parentElement;
-      }
+      });
     }
 
     function renderFallbackChart(chart) {
+      if (currentReactRoot) {
+        currentReactRoot.unmount();
+        currentReactRoot = null;
+      }
       if (chart.type === "radar") {
         renderFallbackRadar(chart);
         return;
@@ -488,6 +534,11 @@ function viewerJs() {
     }
 
     function renderSvg(svg) {
+      if (currentReactRoot) {
+        currentReactRoot.unmount();
+        currentReactRoot = null;
+      }
+      prepareChartFrame(currentPayload || currentConfig);
       currentSvg = svg;
       currentHtml = "";
       chartRoot.innerHTML = svg;
@@ -514,6 +565,10 @@ function viewerJs() {
       }
       if (contentType.includes("text/html")) {
         const html = await response.text();
+        if (currentReactRoot) {
+          currentReactRoot.unmount();
+          currentReactRoot = null;
+        }
         currentHtml = html;
         currentSvg = "";
         prepareChartFrame(currentPayload || currentConfig);
@@ -554,16 +609,9 @@ function viewerJs() {
       if (heightInput) heightInput.value = Number(payload?.height) || 520;
     }
 
-    function applyThemeSelection() {
+    function applyControlSelection() {
       const payload = readPayloadInput();
       payload.theme = themeSelect.value;
-      writePayloadInput(payload);
-      currentPayload = payload;
-      return renderPayload(currentFormat || "config");
-    }
-
-    function applySizeSelection() {
-      const payload = readPayloadInput();
       const width = Number(widthInput?.value || 900);
       const height = Number(heightInput?.value || 520);
       payload.width = Math.min(4096, Math.max(100, Math.round(width)));
@@ -573,9 +621,11 @@ function viewerJs() {
       return renderPayload(currentFormat || "config");
     }
 
-    function scheduleSizeSelection() {
-      window.clearTimeout(sizeRenderTimer);
-      sizeRenderTimer = window.setTimeout(() => safeRun(applySizeSelection), 350);
+    function handleControlKeydown(event) {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        safeRun(applyControlSelection);
+      }
     }
 
     function downloadBlob(filename, type, content) {
@@ -632,7 +682,8 @@ function viewerJs() {
       }
       const renderedCanvas = findRenderableCanvas(exportRoot);
       if (!currentSvg && renderedCanvas) {
-        const blob = await new Promise((resolve) => renderedCanvas.toBlob(resolve, "image/png"));
+        const exportCanvas = canvasToExportCanvas(renderedCanvas);
+        const blob = await new Promise((resolve) => exportCanvas.toBlob(resolve, "image/png"));
         if (blob) {
           downloadBlob((currentHash || "chart") + ".png", "image/png", blob);
           setStatus("Downloaded PNG");
@@ -649,9 +700,10 @@ function viewerJs() {
           image.src = url;
         });
         const canvas = document.createElement("canvas");
-        canvas.width = image.naturalWidth || 900;
-        canvas.height = image.naturalHeight || 520;
-        canvas.getContext("2d").drawImage(image, 0, 0);
+        const { width, height } = chartSize(currentConfig || currentPayload);
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext("2d").drawImage(image, 0, 0, width, height);
         URL.revokeObjectURL(url);
         const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
         const pngUrl = URL.createObjectURL(blob);
@@ -664,7 +716,8 @@ function viewerJs() {
         return;
       }
       if (!window.htmlToImage) throw new Error("PNG export library failed to load.");
-      const blob = await window.htmlToImage.toBlob(exportRoot, { backgroundColor: themeColors[chartTheme(currentConfig || currentPayload)].background });
+      const { width, height } = chartSize(currentConfig || currentPayload);
+      const blob = await window.htmlToImage.toBlob(exportRoot, { width, height, canvasWidth: width, canvasHeight: height, backgroundColor: themeColors[chartTheme(currentConfig || currentPayload)].background });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
@@ -692,9 +745,24 @@ function viewerJs() {
       return canvases.find((canvas) => canvas.width > 160 && canvas.height > 120) || null;
     }
 
+    function chartSize(chart) {
+      const width = Math.min(4096, Math.max(100, Math.round(Number(chart?.width) || Number(chart?.options?.width) || 900)));
+      const height = Math.min(4096, Math.max(100, Math.round(Number(chart?.height) || Number(chart?.options?.height) || 520)));
+      return { width, height };
+    }
+
+    function canvasToExportCanvas(sourceCanvas) {
+      const { width, height } = chartSize(currentConfig || currentPayload);
+      if (sourceCanvas.width === width && sourceCanvas.height === height) return sourceCanvas;
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext("2d").drawImage(sourceCanvas, 0, 0, width, height);
+      return canvas;
+    }
+
     function canvasToSvg(canvas) {
-      const width = canvas.width || canvas.getBoundingClientRect().width || 900;
-      const height = canvas.height || canvas.getBoundingClientRect().height || 520;
+      const { width, height } = chartSize(currentConfig || currentPayload);
       return '<svg xmlns="http://www.w3.org/2000/svg" role="img" viewBox="0 0 ' + width + ' ' + height + '" width="' + width + '" height="' + height + '">' +
         '<title>' + escapeHtml(currentConfig?.title || currentPayload?.title || "Chart") + '</title>' +
         '<image href="' + canvas.toDataURL("image/png") + '" width="' + width + '" height="' + height + '"/></svg>';
@@ -735,11 +803,9 @@ function viewerJs() {
       payloadInput.value = JSON.stringify(state.payload, null, 2);
       syncThemeControl(state.payload);
       syncSizeControls(state.payload);
-      themeSelect?.addEventListener("change", () => safeRun(applyThemeSelection));
-      widthInput?.addEventListener("change", () => safeRun(applySizeSelection));
-      heightInput?.addEventListener("change", () => safeRun(applySizeSelection));
-      widthInput?.addEventListener("input", scheduleSizeSelection);
-      heightInput?.addEventListener("input", scheduleSizeSelection);
+      applyControls?.addEventListener("click", () => safeRun(applyControlSelection));
+      widthInput?.addEventListener("keydown", handleControlKeydown);
+      heightInput?.addEventListener("keydown", handleControlKeydown);
       document.getElementById("render-config").addEventListener("click", () => safeRun(() => renderPayload("config")));
       document.getElementById("render-svg").addEventListener("click", () => safeRun(() => renderPayload("svg")));
       document.getElementById("render-html").addEventListener("click", () => safeRun(() => renderPayload("html")));

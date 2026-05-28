@@ -14,7 +14,7 @@ CHART-001 Node.js PNG SSR API 已标记为 legacy。旧的 `image_base64` 和 `i
 - 默认响应：JSON config，包含 `hash`、`renderer`、`format`、`chart` 和 `metadata`。
 - 支持 `response_format: "config"`。
 - 支持简单图表 `response_format: "svg"`：`line`、`bar`、`column`、`pie`、`summary`。
-- 支持 `response_format: "html"`：返回浏览器端渲染 shell，引入 `@antv/gpt-vis@0.5.7`。
+- 支持 `response_format: "html"`：返回浏览器端渲染 shell，引入 `@antv/gpt-vis@0.6.1`。
 - 支持 `GET /viewer`：Worker 直接返回可编辑、预览和下载的浏览器页面。
 - `response_format: "png"` 或 `Accept: image/png` 在 Worker 版本中不支持，返回 `422 unsupported_response_format`。
 - 主题：`theme` 支持 `default`、`dark`、`academy`，其中 `default` 是 Light 风格。
@@ -76,7 +76,7 @@ Worker 直接返回浏览器端 viewer 页面。
 
 - 编辑 chart payload。
 - 请求 `config`、`svg`、`html` 三种格式。
-- 使用 `@antv/gpt-vis@0.5.7` 在浏览器端渲染复杂图表。
+- 使用 `@antv/gpt-vis@0.6.1` 在浏览器端渲染复杂图表。
 - 下载 JSON config、SVG、PNG。
 
 如果 GPT-Vis CDN 加载失败，或 GPT-Vis 报告当前图表类型不支持，页面会使用内置浏览器 fallback renderer。当前 fallback 已覆盖 `radar`。
@@ -113,8 +113,8 @@ Worker 直接返回浏览器端 viewer 页面。
 | `type` | string | 是 | 无 | trim 后不能为空 | 图表类型。支持大小写不敏感输入，例如 `Column` 会规范化为 `column`。 |
 | `data` | array | 大多数类型必填 | 无 | 非空数组 | 图表数据。`liquid` 不需要 `data`，使用 `percent`。 |
 | `title` | string | 否 | 无 | 非字符串会被忽略 | 图表标题。 |
-| `width` | integer | 否 | `900` | `100..4096` | 输出图片宽度。 |
-| `height` | integer | 否 | `520` | `100..4096` | 输出图片高度。 |
+| `width` | integer | 否 | `900` | `100..4096` | 渲染图表和下载图片的目标宽度。 |
+| `height` | integer | 否 | `520` | `100..4096` | 渲染图表和下载图片的目标高度。 |
 | `theme` | string | 否 | `default` | `default`、`dark`、`academy` | 主题。`light` 会作为 `default` 处理。 |
 | `percent` | number | `liquid` 必填 | 无 | `0..1` | 水波图百分比，例如 `0.72` 表示 72%。 |
 | `shape` | string | 否 | `circle` | `rect`、`circle`、`pin`、`triangle` | `liquid` 专用形状。也可放在 `options.shape`。 |
@@ -128,7 +128,7 @@ Worker 直接返回浏览器端 viewer 页面。
 | `type` | 选择渲染模板。必须使用“支持的 type”表中的值；服务会把大小写归一化，并处理少量别名。 | `{"type": "column"}` 或 `{"type": "Word Cloud"}`。 |
 | `data` | 图表数据数组。字段名由 `type` 决定，服务不会自动从 `date/price` 映射到 `time/value`。 | `line` 使用 `[{"time":"2026-05-01","value":1.12}]`。 |
 | `title` | 图表标题。建议短句，避免把长解释文字放入标题。 | `"title": "Token price"`。 |
-| `width` / `height` | 输出 SVG/HTML/config 中声明的画布尺寸。默认 `900x520` 适合报告正文；最小 `100`，最大 `4096`。 | 缩略图可用 `{"width": 480, "height": 280}`。 |
+| `width` / `height` | 图表产物尺寸契约：Worker SVG、HTML shell 中的 GPT-Vis 图表、浏览器下载的 SVG/PNG 都应以这组尺寸为目标。预览容器只跟随并容纳图表，不作为缩放图表的来源。默认 `900x520` 适合报告正文；最小 `100`，最大 `4096`。 | 缩略图可用 `{"width": 480, "height": 280}`。 |
 | `theme` | 视觉主题。`default` 是 Light；`dark` 用于深色报告或暗色背景；`academy` 用于更偏学术/报告风格的浅色图。 | `{"theme": "dark"}`。 |
 | `percent` | `liquid` 专用进度值，范围 `0..1`。不要传百分数字符串。 | `{"type":"liquid","percent":0.72}` 表示 72%。 |
 | `shape` | `liquid` 专用形状，也可写在 `options.shape`。 | `"shape": "circle"`。 |
@@ -287,15 +287,16 @@ Content-Type: text/html; charset=utf-8
 X-Chart-Renderer: client-html
 ```
 
-HTML shell 包含 JSON、SVG、PNG 下载按钮。复杂图表在浏览器端通过 `@antv/gpt-vis@0.5.7` 渲染。
+HTML shell 包含 JSON、SVG、PNG 下载按钮。复杂图表在浏览器端通过 `@antv/gpt-vis@0.6.1` 渲染。
 
 实现注意：
 
 - Worker 会继续校验并保留 `theme` 到标准化 config。简单 SVG renderer 会直接使用 `default`、`dark`、`academy` 主题。
-- `/viewer` 浏览器端渲染复杂图表时，会把 `theme` 字段传给 GPT-Vis；`@antv/gpt-vis@0.5.7` 支持 `default`、`dark`、`academy` 主题。
-- `/viewer` 提供 Theme、W、H 控件，会同步更新 payload 的 `theme`、`width`、`height` 并重新渲染；这些控件在左侧边栏分行排布，避免窄宽度下溢出。
+- `/viewer` 浏览器端渲染复杂图表时，会把 `theme` 字段传给 GPT-Vis；`@antv/gpt-vis@0.6.1` 支持 `default`、`dark`、`academy` 主题。
+- `/viewer` 提供 Theme、W、H 和 Apply 控件；只有点击 Apply，或在 W/H 输入框按 Enter，才会把控件值同步到 payload 并重新渲染；这些控件在左侧边栏分行排布，避免窄宽度下溢出。
 - `/viewer` 的页面预览容器保持中性的白色工作区，不随 `theme` 改变；`theme` 只传给图表渲染逻辑。
-- `/viewer` 会按 `width`、`height` 动态撑开预览区域，并覆盖 GPT-Vis 内部 300px 容器高度限制，避免大图表被截断。
+- `/viewer` 将 `width`、`height` 作为图表渲染尺寸和下载尺寸；预览容器跟随图表尺寸扩展，只负责完整展示图表，不作为图表缩放来源。
+- `/viewer` 在 GPT-Vis 渲染后触发 resize/reflow；页面只约束 GPT-Vis 工作区以便库完成正确测量，不再强行拉伸 canvas，避免图表变形或回落到内部默认小尺寸。
 - 下载 SVG 时，页面优先序列化真正的图表 SVG；如果当前复杂图表由 canvas 渲染，则导出一个包含 canvas PNG data URL 的 SVG 包装。下载 PNG 时，页面优先导出真正的图表 canvas 或 SVG，而不是工具栏图标。
 
 ## CHART-001 Legacy PNG SSR API
