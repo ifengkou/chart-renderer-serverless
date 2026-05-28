@@ -16,7 +16,7 @@ const chart = {
 
 const html = renderChartHtml(chart, "sha256:test");
 assert.match(html, /^<!doctype html>/);
-assert.match(html, /@antv\/gpt-vis@0\.5\.5/);
+assert.match(html, /@antv\/gpt-vis@0\.5\.7/);
 assert.match(html, /id="chart-root"/);
 assert.match(html, /id="download-json"/);
 assert.match(html, /id="download-svg"/);
@@ -30,6 +30,8 @@ const viewer = renderViewerHtml();
 assert.match(viewer, /^<!doctype html>/);
 assert.match(viewer, /id="payload-input"/);
 assert.match(viewer, /id="theme-select"/);
+assert.match(viewer, /id="width-input"/);
+assert.match(viewer, /id="height-input"/);
 assert.match(viewer, /id="render-config"/);
 assert.match(viewer, /id="render-svg"/);
 assert.match(viewer, /id="render-html"/);

@@ -3,7 +3,7 @@ import { canRenderSvg, renderSvg, SIMPLE_SVG_TYPES } from "./renderers/svg.js";
 
 const SERVICE_NAME = "chart-renderer";
 const SERVICE_VERSION = "0.2.0";
-const CACHE_NAMESPACE = "worker-v4";
+const CACHE_NAMESPACE = "worker-v5";
 const DEFAULT_WIDTH = 900;
 const DEFAULT_HEIGHT = 520;
 const MIN_SIZE = 100;

@@ -1,7 +1,7 @@
-const GPT_VIS_VERSION = "0.5.5";
+const GPT_VIS_VERSION = "0.5.7";
 const REACT_VERSION = "18";
 const HTML_TO_IMAGE_VERSION = "1.11.11";
-const CACHE_BUSTER = "viewer-v4";
+const CACHE_BUSTER = "viewer-v5";
 
 export function renderChartHtml(chart, hash) {
   const title = chart.title || `${chart.type} chart`;
@@ -44,6 +44,9 @@ export function renderViewerHtml() {
     type: "radar",
     response_format: "html",
     title: "Risk profile",
+    width: 900,
+    height: 520,
+    theme: "default",
     data: [
       { group: "Token A", name: "Liquidity", value: 80 },
       { group: "Token A", name: "Volume", value: 65 },
@@ -89,6 +92,10 @@ export function renderViewerHtml() {
                 <option value="dark">Dark</option>
                 <option value="academy">Academy</option>
               </select>
+              <label for="width-input">W</label>
+              <input id="width-input" type="number" min="100" max="4096" step="10" value="900">
+              <label for="height-input">H</label>
+              <input id="height-input" type="number" min="100" max="4096" step="10" value="520">
             </div>
             <textarea id="payload-input" spellcheck="false"></textarea>
             <pre id="result-output" class="result-output"></pre>
@@ -179,9 +186,11 @@ function viewerCss() {
     button:hover { background: #f1f5f9; }
     .workspace {
       flex: 1;
+      width: 100%;
       display: grid;
-      grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
+      grid-template-columns: minmax(280px, 400px) minmax(0, 1fr);
       min-height: 0;
+      overflow: hidden;
     }
     .editor-panel {
       display: grid;
@@ -191,25 +200,33 @@ function viewerCss() {
       border-right: 1px solid #d9e1ec;
       background: #ffffff;
       min-height: 0;
+      min-width: 0;
+      overflow: hidden;
     }
     .control-row {
-      display: flex;
-      align-items: center;
+      display: grid;
+      grid-template-columns: 64px minmax(0, 1fr);
       gap: 10px;
+      align-items: center;
     }
     .control-row label {
       color: #667085;
       font-size: 13px;
       font-weight: 700;
     }
-    select {
+    select,
+    input[type="number"] {
       height: 34px;
-      min-width: 140px;
       border: 1px solid #c9d4e5;
       border-radius: 6px;
       background: #ffffff;
       color: #111827;
       font-weight: 700;
+    }
+    select { min-width: 128px; }
+    input[type="number"] {
+      width: 100%;
+      padding: 0 8px;
     }
     textarea,
     .result-output {
@@ -227,10 +244,12 @@ function viewerCss() {
     .preview-wrap {
       flex: 1;
       min-height: 0;
+      min-width: 0;
       padding: 16px;
       display: flex;
       flex-direction: column;
       gap: 12px;
+      overflow: hidden;
     }
     .status {
       min-height: 24px;
@@ -246,16 +265,6 @@ function viewerCss() {
       border-radius: 8px;
       padding: 18px;
       overflow: auto;
-    }
-    .chart-root[data-theme="dark"] {
-      background: #0b0f17;
-      border-color: #263247;
-      color: #f8fafc;
-    }
-    .chart-root[data-theme="academy"] {
-      background: #fffdf7;
-      border-color: #d8ccb2;
-      color: #2d2618;
     }
     .chart-root > pre {
       min-width: var(--chart-width, 900px);
@@ -307,6 +316,8 @@ function viewerJs() {
     const statusEl = document.getElementById("status");
     const payloadInput = document.getElementById("payload-input");
     const themeSelect = document.getElementById("theme-select");
+    const widthInput = document.getElementById("width-input");
+    const heightInput = document.getElementById("height-input");
     const resultOutput = document.getElementById("result-output");
     let currentConfig = state.chart || null;
     let currentPayload = state.payload || state.chart || null;
@@ -314,6 +325,7 @@ function viewerJs() {
     let currentHtml = "";
     let currentHash = state.hash || "";
     let currentFormat = "config";
+    let sizeRenderTimer = null;
     let pendingGptVisChart = null;
     const themeColors = {
       default: { background: "#ffffff", border: "#d9e1ec", text: "#111827", muted: "#667085", grid: "#d9e1ec" },
@@ -391,8 +403,6 @@ function viewerJs() {
 
     function toGptVisChart(chart) {
       const next = JSON.parse(JSON.stringify(chart));
-      delete next.theme;
-      if (next.options) delete next.options.theme;
       return next;
     }
 
@@ -520,6 +530,7 @@ function viewerJs() {
         currentConfig = data.chart;
         currentHash = data.hash || currentHash;
         syncThemeControl(data.chart);
+        syncSizeControls(data.chart);
         renderGptVis(data.chart);
         if (resultOutput) resultOutput.textContent = JSON.stringify(data, null, 2);
       }
@@ -538,12 +549,33 @@ function viewerJs() {
       themeSelect.value = chartTheme(payload);
     }
 
+    function syncSizeControls(payload) {
+      if (widthInput) widthInput.value = Number(payload?.width) || 900;
+      if (heightInput) heightInput.value = Number(payload?.height) || 520;
+    }
+
     function applyThemeSelection() {
       const payload = readPayloadInput();
       payload.theme = themeSelect.value;
       writePayloadInput(payload);
       currentPayload = payload;
       return renderPayload(currentFormat || "config");
+    }
+
+    function applySizeSelection() {
+      const payload = readPayloadInput();
+      const width = Number(widthInput?.value || 900);
+      const height = Number(heightInput?.value || 520);
+      payload.width = Math.min(4096, Math.max(100, Math.round(width)));
+      payload.height = Math.min(4096, Math.max(100, Math.round(height)));
+      writePayloadInput(payload);
+      currentPayload = payload;
+      return renderPayload(currentFormat || "config");
+    }
+
+    function scheduleSizeSelection() {
+      window.clearTimeout(sizeRenderTimer);
+      sizeRenderTimer = window.setTimeout(() => safeRun(applySizeSelection), 350);
     }
 
     function downloadBlob(filename, type, content) {
@@ -692,7 +724,7 @@ function viewerJs() {
 
     window.addEventListener("unhandledrejection", (event) => {
       const message = event.reason?.message || String(event.reason || "");
-      if (pendingGptVisChart && /Unknown Component: theme\\.default|not supported/i.test(message)) {
+      if (pendingGptVisChart && /Unknown Component: theme\\.|not supported/i.test(message)) {
         event.preventDefault();
         renderFallbackChart(pendingGptVisChart);
         setStatus("Rendered with built-in browser fallback after GPT-Vis failed: " + message);
@@ -702,7 +734,12 @@ function viewerJs() {
     if (payloadInput) {
       payloadInput.value = JSON.stringify(state.payload, null, 2);
       syncThemeControl(state.payload);
+      syncSizeControls(state.payload);
       themeSelect?.addEventListener("change", () => safeRun(applyThemeSelection));
+      widthInput?.addEventListener("change", () => safeRun(applySizeSelection));
+      heightInput?.addEventListener("change", () => safeRun(applySizeSelection));
+      widthInput?.addEventListener("input", scheduleSizeSelection);
+      heightInput?.addEventListener("input", scheduleSizeSelection);
       document.getElementById("render-config").addEventListener("click", () => safeRun(() => renderPayload("config")));
       document.getElementById("render-svg").addEventListener("click", () => safeRun(() => renderPayload("svg")));
       document.getElementById("render-html").addEventListener("click", () => safeRun(() => renderPayload("html")));

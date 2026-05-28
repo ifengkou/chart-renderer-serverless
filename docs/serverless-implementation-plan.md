@@ -28,7 +28,7 @@
 - R2 不在第一阶段实现，只作为后续可选升级项保留在工程文档中。
 - `/viewer` 由 Worker 直接返回 HTML，不使用 Cloudflare Workers Static Assets。
 - 生产鉴权交给上游 API gateway，Worker 内只做输入限制、错误处理和必要的防滥用边界。
-- HTML shell 使用 `@antv/gpt-vis@0.5.5` 作为客户端复杂图表渲染库。
+- HTML shell 使用 `@antv/gpt-vis@0.5.7` 作为客户端复杂图表渲染库。
 
 ## Non-goals
 
@@ -242,7 +242,7 @@ src/
 - 移除 `canvas`。
 - 移除 `@antv/gpt-vis-ssr`。
 - 增加 `wrangler` 作为 dev dependency。
-- HTML shell 固定从 CDN 加载 `@antv/gpt-vis@0.5.5`。
+- HTML shell 固定从 CDN 加载 `@antv/gpt-vis@0.5.7`。
 - 增加脚本：
   - `dev`: `wrangler dev`
   - `deploy`: `wrangler deploy`
@@ -263,7 +263,7 @@ MAX_BODY_BYTES = "1000000"
 
 ## Client Chart Library
 
-HTML shell 使用 `@antv/gpt-vis@0.5.5`。
+HTML shell 使用 `@antv/gpt-vis@0.5.7`。
 
 选择理由：
 
@@ -275,7 +275,7 @@ HTML shell 使用 `@antv/gpt-vis@0.5.5`。
 
 | 方案 | 状态 | 取舍 |
 | --- | --- | --- |
-| `@antv/gpt-vis@0.5.5` | 采用 | 兼容现有 payload 思路，迁移最快 |
+| `@antv/gpt-vis@0.5.7` | 采用 | 兼容现有 payload 思路，迁移最快 |
 | `@antv/g2@5.4.0` | 备选 | 更底层、更可控，但需要维护 payload 到 G2 spec 的映射 |
 | Hybrid | 暂不采用 | 灵活但复杂度和测试矩阵更高 |
 
@@ -407,7 +407,7 @@ R2 不在第一阶段实现，只作为后续可选持久层：
 状态：已实现。
 
 - 实现复杂图表 HTML shell，`response_format: "html"` 返回 `text/html; charset=utf-8`。
-- HTML shell 引入 `@antv/gpt-vis@0.5.5` UMD 浏览器脚本，并用 `vis-chart` markdown block 渲染图表。
+- HTML shell 引入 `@antv/gpt-vis@0.5.7` UMD 浏览器脚本，并用 `vis-chart` markdown block 渲染图表。
 - 对 GPT-Vis 默认组件不支持或 CDN 加载失败的场景，提供内置浏览器 fallback renderer，已覆盖 `radar`。
 - 提供 JSON、SVG、PNG 下载能力：
   - JSON 下载当前标准化 config。
@@ -415,8 +415,8 @@ R2 不在第一阶段实现，只作为后续可选持久层：
   - PNG 优先导出当前图表 canvas，或把当前 SVG rasterize 到 browser canvas；非 SVG DOM 可走 `html-to-image`。
 - 预览区域按 chart `width`、`height` 动态设置最小尺寸，避免大图表被截断。
 - 覆盖 GPT-Vis 内部 300px 容器高度限制，并在渲染后按 canvas 父级链路补写高度，避免 styled-component class 变化导致图表被裁切。
-- `/viewer` 提供 Theme 下拉选择，选择值同步到 payload 的 `theme` 后重新渲染。
-- 浏览器端渲染复杂图表时保留 Worker config 的 `theme`，但传给 `@antv/gpt-vis@0.5.5` 前移除 theme 字段，避免 GPT-Vis 报 `Unknown Component: theme.*`；预览容器和 fallback renderer 自行应用主题。
+- `/viewer` 提供 Theme、W、H 控件，选择值同步到 payload 的 `theme`、`width`、`height` 后重新渲染；控件分行排布，避免窄边栏溢出。
+- `/viewer` 的页面预览容器保持中性的白色工作区，不随 `theme` 改变；浏览器端渲染复杂图表时保留并传递 Worker config 的 `theme`，由图表库应用主题。
 - 增加由 Worker 直接返回的 `/viewer`，支持编辑 payload、请求 config/svg/html、预览和下载。
 
 验收：
@@ -540,12 +540,12 @@ curl -i -s -X POST http://127.0.0.1:8787/render \
 - payload hash 稳定，相同规范化 payload 命中缓存。
 - 第一阶段只使用 Cache API，不包含 R2 binding 或 R2 读写代码。
 - `/viewer` 由 Worker 直接返回。
-- HTML shell 使用 `@antv/gpt-vis@0.5.5`。
+- HTML shell 使用 `@antv/gpt-vis@0.5.7`。
 - 生产鉴权边界明确归属上游 API gateway。
 - 文档清楚标明 CHART-001 Node PNG SSR 是 legacy，CHART-002 Worker 是当前目标方案。
 
 ## Deferred Upgrades
 
 - R2 持久化：后续如需要跨 POP 复用和长期保存，再增加 R2 binding、读写逻辑和 `GET /artifact/:hash` 回源路径。
-- G2 客户端渲染：如 `@antv/gpt-vis@0.5.5` 无法满足某些复杂图表控制需求，再评估 `@antv/g2@5.4.0` 或 Hybrid 方案。
+- G2 客户端渲染：如 `@antv/gpt-vis@0.5.7` 无法满足某些复杂图表控制需求，再评估 `@antv/g2@5.4.0` 或 Hybrid 方案。
 - Worker 内鉴权：除非上游 API gateway 无法覆盖部署链路，否则不在 Worker 内实现业务鉴权。

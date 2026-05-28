@@ -14,7 +14,7 @@ CHART-001 Node.js PNG SSR API 已标记为 legacy。旧的 `image_base64` 和 `i
 - 默认响应：JSON config，包含 `hash`、`renderer`、`format`、`chart` 和 `metadata`。
 - 支持 `response_format: "config"`。
 - 支持简单图表 `response_format: "svg"`：`line`、`bar`、`column`、`pie`、`summary`。
-- 支持 `response_format: "html"`：返回浏览器端渲染 shell，引入 `@antv/gpt-vis@0.5.5`。
+- 支持 `response_format: "html"`：返回浏览器端渲染 shell，引入 `@antv/gpt-vis@0.5.7`。
 - 支持 `GET /viewer`：Worker 直接返回可编辑、预览和下载的浏览器页面。
 - `response_format: "png"` 或 `Accept: image/png` 在 Worker 版本中不支持，返回 `422 unsupported_response_format`。
 - 主题：`theme` 支持 `default`、`dark`、`academy`，其中 `default` 是 Light 风格。
@@ -76,7 +76,7 @@ Worker 直接返回浏览器端 viewer 页面。
 
 - 编辑 chart payload。
 - 请求 `config`、`svg`、`html` 三种格式。
-- 使用 `@antv/gpt-vis@0.5.5` 在浏览器端渲染复杂图表。
+- 使用 `@antv/gpt-vis@0.5.7` 在浏览器端渲染复杂图表。
 - 下载 JSON config、SVG、PNG。
 
 如果 GPT-Vis CDN 加载失败，或 GPT-Vis 报告当前图表类型不支持，页面会使用内置浏览器 fallback renderer。当前 fallback 已覆盖 `radar`。
@@ -287,13 +287,14 @@ Content-Type: text/html; charset=utf-8
 X-Chart-Renderer: client-html
 ```
 
-HTML shell 包含 JSON、SVG、PNG 下载按钮。复杂图表在浏览器端通过 `@antv/gpt-vis@0.5.5` 渲染。
+HTML shell 包含 JSON、SVG、PNG 下载按钮。复杂图表在浏览器端通过 `@antv/gpt-vis@0.5.7` 渲染。
 
 实现注意：
 
 - Worker 会继续校验并保留 `theme` 到标准化 config。简单 SVG renderer 会直接使用 `default`、`dark`、`academy` 主题。
-- `/viewer` 浏览器端渲染复杂图表时，会先移除传给 GPT-Vis 的 `theme` 字段，避免 `@antv/gpt-vis@0.5.5` 把 `theme.default`、`theme.dark` 等值解析为未知组件；页面自身仍会按主题调整预览容器和 fallback renderer。
-- `/viewer` 提供 Theme 下拉选择，会同步更新 payload 的 `theme` 并重新渲染。
+- `/viewer` 浏览器端渲染复杂图表时，会把 `theme` 字段传给 GPT-Vis；`@antv/gpt-vis@0.5.7` 支持 `default`、`dark`、`academy` 主题。
+- `/viewer` 提供 Theme、W、H 控件，会同步更新 payload 的 `theme`、`width`、`height` 并重新渲染；这些控件在左侧边栏分行排布，避免窄宽度下溢出。
+- `/viewer` 的页面预览容器保持中性的白色工作区，不随 `theme` 改变；`theme` 只传给图表渲染逻辑。
 - `/viewer` 会按 `width`、`height` 动态撑开预览区域，并覆盖 GPT-Vis 内部 300px 容器高度限制，避免大图表被截断。
 - 下载 SVG 时，页面优先序列化真正的图表 SVG；如果当前复杂图表由 canvas 渲染，则导出一个包含 canvas PNG data URL 的 SVG 包装。下载 PNG 时，页面优先导出真正的图表 canvas 或 SVG，而不是工具栏图标。
 
