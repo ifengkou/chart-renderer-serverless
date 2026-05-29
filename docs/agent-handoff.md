@@ -59,8 +59,8 @@ Flow for `POST /render`:
 
 Important current constants:
 
-- `CACHE_NAMESPACE = "worker-v9"` in `src/worker.js`.
-- `CACHE_BUSTER = "viewer-v9"` in `src/renderers/html-shell.js`.
+- `CACHE_NAMESPACE = "worker-v12"` in `src/worker.js`.
+- `CACHE_BUSTER = "viewer-v12"` in `src/renderers/html-shell.js`.
 - GPT-Vis browser version is fixed to `@antv/gpt-vis@0.6.1`.
 - Root `package.json` intentionally has no `canvas` or `@antv/gpt-vis-ssr` dependency.
 

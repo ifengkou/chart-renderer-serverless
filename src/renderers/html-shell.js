@@ -1,7 +1,7 @@
 const GPT_VIS_VERSION = "0.6.1";
 const REACT_VERSION = "18";
 const HTML_TO_IMAGE_VERSION = "1.11.11";
-const CACHE_BUSTER = "viewer-v9";
+const CACHE_BUSTER = "viewer-v12";
 
 export function renderChartHtml(chart, hash) {
   const title = chart.title || `${chart.type} chart`;
@@ -265,7 +265,9 @@ function viewerCss() {
     }
     .chart-root {
       flex: 1;
-      min-height: 640px;
+      width: 100%;
+      min-width: 0;
+      min-height: 0;
       background: #ffffff;
       border: 1px solid #d9e1ec;
       border-radius: 8px;
@@ -273,11 +275,12 @@ function viewerCss() {
       overflow: auto;
     }
     .chart-root > pre {
-      min-width: var(--chart-width, 900px);
-      width: var(--chart-width, 900px);
+      width: 100%;
+      min-width: 0;
       margin: 0;
       font-family: inherit;
       white-space: normal;
+      overflow: visible !important;
     }
     .chart-root > svg {
       width: auto;
@@ -293,23 +296,33 @@ function viewerCss() {
     .chart-root [class*="TabContent-gpt-vis"],
     .chart-root [class*="StyledGPTVis-gpt-vis"],
     .chart-root [class*="ChartWrapper-gpt-vis"] {
-      width: var(--chart-width, 900px) !important;
-      min-width: var(--chart-width, 900px) !important;
-      min-height: var(--chart-inner-height, 520px) !important;
+      width: auto !important;
+      min-width: 0 !important;
+      max-width: none !important;
+      height: auto !important;
+      min-height: 0 !important;
       max-height: none !important;
-    }
-    .chart-root [class*="StyledGPTVis-gpt-vis"],
-    .chart-root [class*="ChartWrapper-gpt-vis"] {
-      height: var(--chart-inner-height, 520px) !important;
+      overflow: visible !important;
     }
     .chart-root [class*="ChartWrapper-gpt-vis"] > div {
-      width: 100% !important;
-      height: 100% !important;
+      width: auto !important;
+      height: auto !important;
+      overflow: visible !important;
+    }
+    .chart-root .chart-size-host,
+    .chart-root [class*="ChartWrapper-gpt-vis"] > .chart-size-host {
+      width: var(--chart-host-width) !important;
+      min-width: var(--chart-host-width) !important;
+      height: var(--chart-host-height) !important;
+      min-height: var(--chart-host-height) !important;
+      max-width: none !important;
+      max-height: none !important;
+      overflow: visible !important;
     }
     .chart-root iframe {
       width: 100%;
-      min-width: var(--chart-width, 900px);
-      min-height: var(--chart-frame-height, 700px);
+      height: 100%;
+      min-height: 0;
       border: 0;
     }
     .shell-single .chart-root {
@@ -445,18 +458,16 @@ function viewerJs() {
     }
 
     function prepareChartFrame(chart) {
-      const { width, height } = chartSize(chart);
       chartRoot.dataset.theme = chartTheme(chart);
-      chartRoot.style.setProperty("--chart-width", width + "px");
-      chartRoot.style.setProperty("--chart-frame-height", Math.max(700, height + 180) + "px");
-      chartRoot.style.setProperty("--chart-inner-height", height + "px");
-      chartRoot.style.minHeight = Math.max(640, height + 180) + "px";
+      chartRoot.style.removeProperty("--chart-width");
+      chartRoot.style.removeProperty("--chart-inner-height");
     }
 
     function scheduleChartResize(chart = currentConfig) {
       if (chart) prepareChartFrame(chart);
       chartRoot.classList.add("chart-resizing");
       const fireResize = () => {
+        applyChartHostSize(chart);
         window.dispatchEvent(new Event("resize"));
         chartRoot.classList.remove("chart-resizing");
       };
@@ -464,6 +475,30 @@ function viewerJs() {
         fireResize();
         window.setTimeout(fireResize, 250);
       });
+    }
+
+    function applyChartHostSize(chart = currentConfig || currentPayload) {
+      if (!chart) return;
+      const { width, height } = chartSize(chart);
+      for (const node of chartRoot.querySelectorAll(".chart-size-host")) {
+        node.classList.remove("chart-size-host");
+        node.style.removeProperty("--chart-host-width");
+        node.style.removeProperty("--chart-host-height");
+        node.style.removeProperty("width");
+        node.style.removeProperty("min-width");
+        node.style.removeProperty("height");
+        node.style.removeProperty("min-height");
+      }
+      const canvas = findRenderableCanvas(chartRoot);
+      const host = canvas?.parentElement || chartRoot.querySelector('[class*="ChartWrapper-gpt-vis"] > div');
+      if (!host) return;
+      host.classList.add("chart-size-host");
+      host.style.setProperty("--chart-host-width", width + "px");
+      host.style.setProperty("--chart-host-height", height + "px");
+      host.style.width = width + "px";
+      host.style.minWidth = width + "px";
+      host.style.height = height + "px";
+      host.style.minHeight = height + "px";
     }
 
     function bindGptVisTabResize() {

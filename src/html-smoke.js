@@ -36,5 +36,11 @@ assert.match(viewer, /id="apply-controls"/);
 assert.match(viewer, /id="render-config"/);
 assert.match(viewer, /id="render-svg"/);
 assert.match(viewer, /id="render-html"/);
+assert.doesNotMatch(viewer, /chartRoot\.style\.setProperty\("--chart-width"/);
+assert.doesNotMatch(viewer, /\[class\*="TabContainer-gpt-vis"\][\s\S]*width: var\(--chart-width/);
+assert.match(viewer, /chartRoot\.style\.removeProperty\("--chart-width"\)/);
+assert.match(viewer, /chart-size-host/);
+assert.match(viewer, /applyChartHostSize\(chart\)/);
+assert.match(viewer, /--chart-host-width/);
 
 console.log(JSON.stringify({ success: true, html_cases: 2 }));
