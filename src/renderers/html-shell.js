@@ -1,7 +1,7 @@
 const GPT_VIS_VERSION = "0.6.1";
 const REACT_VERSION = "18";
 const HTML_TO_IMAGE_VERSION = "1.11.11";
-const CACHE_BUSTER = "viewer-v12";
+const CACHE_BUSTER = "viewer-v14";
 
 export function renderChartHtml(chart, hash) {
   const title = chart.title || `${chart.type} chart`;
@@ -412,6 +412,7 @@ function viewerJs() {
           [chartType.Bar || "bar", gptVis.Bar],
           [chartType.Area || "area", gptVis.Area],
           [chartType.Radar || "radar", gptVis.Radar],
+          [chartType.Waterfall || "waterfall", gptVis.Waterfall],
           [chartType.WordCloud || "word-cloud", gptVis.WordCloud],
           [chartType.Treemap || "treemap", gptVis.Treemap],
           [chartType.DualAxes || "dual-axes", gptVis.DualAxes],
@@ -523,6 +524,10 @@ function viewerJs() {
         renderFallbackRadar(chart);
         return;
       }
+      if (chart.type === "waterfall") {
+        renderFallbackWaterfall(chart);
+        return;
+      }
       chartRoot.innerHTML =
         '<div class="fallback-card"><h2>' + escapeHtml(chart.title || chart.type + ' chart') + '</h2><pre>' +
         escapeHtml(JSON.stringify(chart, null, 2)) +
@@ -565,6 +570,69 @@ function viewerJs() {
         '<title>' + escapeHtml(chart.title || "Radar chart") + '</title><rect width="100%" height="100%" fill="' + colors.background + '"/>' +
         '<text x="24" y="28" font-size="22" font-weight="700" fill="' + colors.text + '">' + escapeHtml(chart.title || "Radar chart") + '</text>' +
         axis + polygons + '</svg>';
+      chartRoot.innerHTML = currentSvg;
+    }
+
+    function renderFallbackWaterfall(chart) {
+      prepareChartFrame(chart);
+      const data = Array.isArray(chart.data) ? chart.data : [];
+      const { width, height } = chartSize(chart);
+      const colors = themeColors[chartTheme(chart)];
+      const margin = { top: 72, right: 32, bottom: 70, left: 64 };
+      const plotWidth = Math.max(10, width - margin.left - margin.right);
+      const plotHeight = Math.max(10, height - margin.top - margin.bottom);
+      let running = 0;
+      const steps = data.map((item, index) => {
+        const value = Number(item.value) || 0;
+        const isTotal = Boolean(item.isTotal);
+        const start = isTotal ? 0 : running;
+        const end = isTotal ? value : running + value;
+        if (!isTotal) running = end;
+        return {
+          index,
+          label: item.category || item.name || item.label || "Step " + (index + 1),
+          value,
+          isTotal,
+          start,
+          end
+        };
+      });
+      const extents = steps.flatMap((step) => [step.start, step.end, 0]);
+      const minValue = Math.min(...extents, 0);
+      const maxValue = Math.max(...extents, 1);
+      const span = maxValue - minValue || 1;
+      const y = (value) => margin.top + ((maxValue - value) / span) * plotHeight;
+      const zeroY = y(0);
+      const slot = plotWidth / Math.max(1, steps.length);
+      const barWidth = Math.max(18, Math.min(72, slot * 0.62));
+      const bars = steps.map((step) => {
+        const x = margin.left + step.index * slot + (slot - barWidth) / 2;
+        const y1 = y(step.start);
+        const y2 = y(step.end);
+        const top = Math.min(y1, y2);
+        const barHeight = Math.max(2, Math.abs(y2 - y1));
+        const fill = step.isTotal ? "#2563eb" : step.value >= 0 ? "#16a34a" : "#dc2626";
+        const valueY = top - 8 < margin.top ? top + barHeight + 16 : top - 8;
+        return '<g data-chart-node="fallback-waterfall">' +
+          '<rect x="' + round(x) + '" y="' + round(top) + '" width="' + round(barWidth) + '" height="' + round(barHeight) + '" rx="4" fill="' + fill + '"/>' +
+          '<text x="' + round(x + barWidth / 2) + '" y="' + round(valueY) + '" text-anchor="middle" font-size="12" font-weight="700" fill="' + colors.text + '">' + escapeHtml(formatNumber(step.end)) + '</text>' +
+          '<text x="' + round(x + barWidth / 2) + '" y="' + round(height - margin.bottom + 28) + '" text-anchor="middle" font-size="11" fill="' + colors.muted + '">' + escapeHtml(truncateLabel(step.label, 14)) + '</text>' +
+          '</g>';
+      }).join("");
+      const connectors = steps.slice(0, -1).map((step, index) => {
+        const fromX = margin.left + index * slot + (slot + barWidth) / 2;
+        const toX = margin.left + (index + 1) * slot + (slot - barWidth) / 2;
+        const lineY = y(step.end);
+        return '<line x1="' + round(fromX) + '" y1="' + round(lineY) + '" x2="' + round(toX) + '" y2="' + round(lineY) + '" stroke="' + colors.grid + '" stroke-dasharray="4 4"/>';
+      }).join("");
+      currentSvg = '<svg xmlns="http://www.w3.org/2000/svg" role="img" viewBox="0 0 ' + width + ' ' + height + '" width="' + width + '" height="' + height + '">' +
+        '<title>' + escapeHtml(chart.title || "Waterfall chart") + '</title>' +
+        '<rect width="100%" height="100%" fill="' + colors.background + '"/>' +
+        '<text x="24" y="34" font-size="22" font-weight="700" fill="' + colors.text + '">' + escapeHtml(chart.title || "Waterfall chart") + '</text>' +
+        '<line x1="' + margin.left + '" y1="' + round(zeroY) + '" x2="' + (width - margin.right) + '" y2="' + round(zeroY) + '" stroke="' + colors.grid + '"/>' +
+        '<text x="' + (margin.left - 12) + '" y="' + round(zeroY + 4) + '" text-anchor="end" font-size="12" fill="' + colors.muted + '">0</text>' +
+        connectors + bars +
+        '</svg>';
       chartRoot.innerHTML = currentSvg;
     }
 
@@ -784,6 +852,22 @@ function viewerJs() {
       const width = Math.min(4096, Math.max(100, Math.round(Number(chart?.width) || Number(chart?.options?.width) || 900)));
       const height = Math.min(4096, Math.max(100, Math.round(Number(chart?.height) || Number(chart?.options?.height) || 520)));
       return { width, height };
+    }
+
+    function formatNumber(value) {
+      const number = Number(value) || 0;
+      if (Math.abs(number) >= 1000000) return (number / 1000000).toFixed(1).replace(/\\.0$/, "") + "M";
+      if (Math.abs(number) >= 1000) return (number / 1000).toFixed(1).replace(/\\.0$/, "") + "K";
+      return String(Math.round(number * 100) / 100);
+    }
+
+    function truncateLabel(value, maxLength) {
+      const text = String(value);
+      return text.length > maxLength ? text.slice(0, Math.max(1, maxLength - 1)) + "..." : text;
+    }
+
+    function round(value) {
+      return Math.round(value * 100) / 100;
     }
 
     function canvasToExportCanvas(sourceCanvas) {

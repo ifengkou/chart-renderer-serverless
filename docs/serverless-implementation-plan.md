@@ -482,10 +482,10 @@ charts/{artifact_namespace}/{format}/{hash}.metadata.json
 示例：
 
 ```text
-charts/worker-v12/svg/sha256:abc123
-charts/worker-v12/html/sha256:abc123
-charts/worker-v12/config/sha256:abc123
-charts/worker-v12/config/sha256:abc123.metadata.json
+charts/worker-v14/svg/sha256:abc123
+charts/worker-v14/html/sha256:abc123
+charts/worker-v14/config/sha256:abc123
+charts/worker-v14/config/sha256:abc123.metadata.json
 ```
 
 metadata 建议字段：
@@ -501,7 +501,7 @@ metadata 建议字段：
   "theme": "default",
   "content_type": "image/svg+xml; charset=utf-8",
   "created_at": "2026-05-29T00:00:00.000Z",
-  "artifact_namespace": "worker-v12"
+  "artifact_namespace": "worker-v14"
 }
 ```
 
@@ -637,7 +637,7 @@ GET /artifact/:hash
 - 真实浏览器加载 `https://cdn.jsdelivr.net/npm/@antv/gpt-vis@0.6.1/dist/umd/index.min.js` 后，当前 `vis-chart` markdown block 渲染链路可继续生成图表 canvas。
 - Theme、W、H 控件仍能同步到 payload；预览容器保持白色工作区。
 - SVG/PNG 下载按钮验证通过。
-- Cache API 在 `worker-v12` namespace 下验证通过，同一语义 payload 第二次请求返回 `X-Chart-Cache: hit`。
+- Cache API 在 `worker-v14` namespace 下验证通过，同一语义 payload 第二次请求返回 `X-Chart-Cache: hit`。
 - 记录需要新增的 binding、key 设计、metadata 和验收思路。
 
 验收：

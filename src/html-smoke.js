@@ -42,5 +42,8 @@ assert.match(viewer, /chartRoot\.style\.removeProperty\("--chart-width"\)/);
 assert.match(viewer, /chart-size-host/);
 assert.match(viewer, /applyChartHostSize\(chart\)/);
 assert.match(viewer, /--chart-host-width/);
+assert.match(viewer, /\[chartType\.Waterfall \|\| "waterfall", gptVis\.Waterfall\]/);
+assert.match(viewer, /renderFallbackWaterfall\(chart\)/);
+assert.match(viewer, /data-chart-node="fallback-waterfall"/);
 
 console.log(JSON.stringify({ success: true, html_cases: 2 }));
