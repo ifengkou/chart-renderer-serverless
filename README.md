@@ -1,69 +1,51 @@
-# Chart Renderer Service
+# Chart Renderer Worker
 
-Private GPT-Vis SSR renderer for chart generation.
+Cloudflare Worker chart artifact service.
 
-This service is intentionally standalone. It does not import or read files from
-an outer `app/` directory, does not use `agent-model-configs`, and can be run
-from this directory with its own environment file.
+The active runtime is serverless. It does not render PNG on the server and does not install native `canvas` dependencies. The Worker returns normalized config, simple SVG, or an HTML shell for browser-side GPT-Vis rendering. PNG download is handled in the browser viewer.
 
 ## Docs
 
 - Implementation, configuration, usage, and current status: `docs/README.md`
 - Agent-facing API reference: `docs/api.md`
-- CHART-001 implementation plan: `docs/implementation-plan.md`
+- Agent handoff and implementation map: `docs/agent-handoff.md`
 - CHART-002 Cloudflare Worker serverless migration plan: `docs/serverless-implementation-plan.md`
-- Standalone migration checklist: `docs/standalone-readiness.md`
+- Legacy CHART-001 Node SSR plan: `docs/implementation-plan.md`
+- Standalone migration notes: `docs/standalone-readiness.md`
 
-## Configuration
+## Commands
 
 ```bash
-cp .env.example .env
+npm install
+npm run dev
+npm run html:smoke
+npm run svg:smoke
+npm run deploy -- --dry-run
 ```
 
-| Variable | Default | Description |
-| --- | --- | --- |
-| `CHART_RENDERER_HOST` | `0.0.0.0` | HTTP bind host. |
-| `CHART_RENDERER_PORT` | `8787` | HTTP bind port. |
-| `CHART_RENDERER_MAX_BODY_BYTES` | `1000000` | Maximum JSON request body size. |
+Publish to Cloudflare after login:
+
+```bash
+npx wrangler login
+npm run deploy
+```
 
 ## API
 
-- `GET /health`: returns service and dependency metadata.
-- `POST /render`: renders a chart payload with `@antv/gpt-vis-ssr`.
+- `GET /health`: Worker health and runtime metadata.
+- `GET /viewer`: browser viewer for editing payloads, rendering charts, and downloading JSON/SVG/PNG.
+- `POST /render`: returns `config`, `svg`, or `html`.
 
-Default response is JSON with `image_base64` and renderer metadata. Set
-`response_format: "png"` in the request body or send `Accept: image/png` to
-receive a PNG binary response.
-
-Supported themes are `default`, `dark`, and `academy`. Common supported chart
-types include `line`, `bar`, `column`, `pie`, `area`, `waterfall`,
-`word-cloud`, `liquid`, `radar`, `table`, and `summary`.
-
-## Smoke Test
+Example:
 
 ```bash
-npm ci
-npm run smoke
-npm audit --omit=dev
-npm start
-```
-
-To load `.env` in local development:
-
-```bash
-npm run start:env
-```
-
-To run as a standalone Docker Compose service:
-
-```bash
-cp .env.example .env
-docker compose up --build
-```
-
-```bash
-curl -s http://127.0.0.1:8787/health
 curl -s -X POST http://127.0.0.1:8787/render \
   -H "Content-Type: application/json" \
-  -d '{"type":"line","width":900,"height":520,"data":[{"time":"2026-05-01","value":1.12},{"time":"2026-05-02","value":1.18}],"title":"Smoke test"}'
+  -d '{"type":"line","response_format":"svg","width":900,"height":520,"data":[{"time":"2026-05-01","value":1.12},{"time":"2026-05-02","value":1.18}],"title":"Smoke test"}'
 ```
+
+`response_format: "png"` and `Accept: image/png` return `422 unsupported_response_format` in the Worker.
+
+## Legacy
+
+The historical Node.js PNG SSR implementation has been isolated under `legacy/node-ssr/` for reference. It is not part of the root install, root scripts, or Worker bundle.

@@ -1,5 +1,7 @@
 # CHART-001 私有 GPT-Vis SSR Renderer 专项计划
 
+> Legacy note: this document describes the historical CHART-001 Node.js PNG SSR implementation. It is not the current default runtime. The active implementation is CHART-002 Cloudflare Worker, documented in `docs/serverless-implementation-plan.md`. The Node SSR files have been isolated under `legacy/node-ssr/`.
+
 ## Summary
 
 建设一个独立的 Node.js `chart-renderer` 服务，基于 `@antv/gpt-vis-ssr` 将结构化 chart payload 渲染为 PNG。该服务作为私有部署的本地 renderer，不依赖 `antv-studio.alipay.com`，也不依赖外层工程 `app/` 目录或外层工程 agent 模型配置。

@@ -301,7 +301,7 @@ HTML shell 包含 JSON、SVG、PNG 下载按钮。复杂图表在浏览器端通
 
 ## CHART-001 Legacy PNG SSR API
 
-以下 `image_base64` 和 `image/png` 响应只适用于历史 Node.js SSR 服务，不属于 Cloudflare Worker 版本当前契约。
+以下 `image_base64` 和 `image/png` 响应只适用于历史 Node.js SSR 服务，不属于 Cloudflare Worker 版本当前契约。历史实现已隔离到 `legacy/node-ssr/`，根安装和 Worker bundle 不再包含 `canvas` 或 `@antv/gpt-vis-ssr`。
 
 ### PNG Response 200
 

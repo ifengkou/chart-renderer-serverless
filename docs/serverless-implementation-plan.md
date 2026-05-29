@@ -444,10 +444,167 @@ R2 不在第一阶段实现，只作为后续可选持久层：
 - 同一 payload 第二次请求返回 `X-Chart-Cache: hit`。
 - 不同字段顺序的等价 payload 命中同一 hash。
 
-### Phase 5: Optional R2 Persistence Documentation
+### Phase 5: Optional R2 Persistence Documentation - Documented
 
 - 不实现 R2 代码。
 - 在工程文档中保留 R2 后续升级方案。
+
+状态：已文档化，当前代码和 `wrangler.toml` 不包含 R2 binding、R2 读写逻辑或 artifact 回源路由。
+
+Phase 5 的目标不是把 R2 接入当前 Worker，而是为后续明确升级边界，避免第一阶段把 Cache API-only 方案复杂化。
+
+#### 什么时候需要 R2
+
+继续只用 Cache API 的场景：
+
+- 产物可以按 payload 重新生成。
+- 不要求跨 POP 强一致复用。
+- 不要求长期留存、审计、分享固定 artifact URL。
+- 成本和复杂度优先于持久化命中率。
+
+考虑升级到 R2 的触发条件：
+
+- 需要跨 Cloudflare POP 复用同一 hash 产物，减少重复生成 HTML/SVG/config。
+- 需要长期保存图表产物用于报告归档、审计或异步下载。
+- 需要公开或半公开的固定 artifact URL，例如 `GET /artifact/:hash`。
+- 需要保存 artifact metadata，例如 chart type、renderer、format、width、height、created_at、content_type。
+- 需要从 Cache API miss 中恢复，而不是每次都重新渲染。
+
+#### 建议的 R2 产物模型
+
+R2 object key 建议包含版本、format 和 hash：
+
+```text
+charts/{artifact_namespace}/{format}/{hash}
+charts/{artifact_namespace}/{format}/{hash}.metadata.json
+```
+
+示例：
+
+```text
+charts/worker-v10/svg/sha256:abc123
+charts/worker-v10/html/sha256:abc123
+charts/worker-v10/config/sha256:abc123
+charts/worker-v10/config/sha256:abc123.metadata.json
+```
+
+metadata 建议字段：
+
+```json
+{
+  "hash": "sha256:...",
+  "format": "svg",
+  "chart_type": "line",
+  "renderer": "worker-svg",
+  "width": 900,
+  "height": 520,
+  "theme": "default",
+  "content_type": "image/svg+xml; charset=utf-8",
+  "created_at": "2026-05-29T00:00:00.000Z",
+  "artifact_namespace": "worker-v10"
+}
+```
+
+注意：
+
+- hash 仍应来自标准化 chart config，而不是原始请求字符串。
+- `artifact_namespace` 应独立于代码版本；当 HTML shell、下载语义、renderer 输出或 config contract 改变时递增。
+- 不建议把用户 title 或原始 payload 放进 object key。
+
+#### 建议的读写顺序
+
+如果未来实现 R2，建议请求链路为：
+
+1. 规范化 payload。
+2. 计算 stable hash。
+3. 查 `caches.default`。
+4. Cache hit：直接返回。
+5. Cache miss：查 R2 object。
+6. R2 hit：构造响应，回填 Cache API，然后返回 `X-Chart-Cache: r2-hit` 或保留 `hit` 并增加 `X-Chart-Storage: r2`。
+7. R2 miss：生成 SVG/HTML/config。
+8. 写 R2 object 和 metadata。
+9. 写 Cache API。
+10. 返回 miss 响应。
+
+建议响应头：
+
+```text
+ETag: "sha256:..."
+X-Chart-Hash: sha256:...
+X-Chart-Cache: miss | hit | r2-hit
+X-Chart-Storage: cache-api | r2 | generated
+X-Chart-Type: line
+X-Chart-Renderer: worker-svg
+```
+
+#### 建议的 `wrangler.toml` 增量
+
+仅在真正实现 R2 代码时再加入 binding。当前 Phase 5 不添加该配置。
+
+后续示例：
+
+```toml
+[[r2_buckets]]
+binding = "CHART_ARTIFACTS"
+bucket_name = "chart-renderer-artifacts"
+preview_bucket_name = "chart-renderer-artifacts-preview"
+```
+
+对应代码中应通过 `env.CHART_ARTIFACTS` 访问，不要硬编码 bucket 名称。
+
+#### 可选的新路由
+
+如果需要固定 artifact URL，可新增：
+
+```text
+GET /artifact/:format/:hash
+GET /artifact/:hash
+```
+
+建议优先使用带 format 的路径，避免同一 hash 在不同 format 下含义不清。
+
+行为建议：
+
+- 先查 Cache API，再查 R2。
+- 命中 R2 后回填 Cache API。
+- 404 返回 JSON：`artifact_not_found`。
+- 不在 artifact URL 中暴露原始 payload。
+
+#### 删除、过期与成本控制
+
+后续实现时需要明确 retention 策略：
+
+- 永久保存：适合报告归档，但需要成本预算和清理工具。
+- TTL 保存：适合临时分享，可通过定期任务或生命周期策略清理。
+- 只保存 HTML/SVG/config 中的一部分：例如只持久化 SVG 和 config，HTML shell 仍按版本生成。
+
+建议不要在第一版 R2 中保存浏览器导出的 PNG，因为当前产品定义仍是不在 Worker 生成 PNG；如果要保存 PNG，应由浏览器或上游上传，并单独定义来源和信任边界。
+
+#### 安全边界
+
+- 生产鉴权仍归上游 API gateway。
+- R2 object 不应默认公开读；公开 artifact URL 需要单独鉴权或签名策略。
+- 不保存未脱敏的业务敏感字段，除非上游确认图表 payload 可归档。
+- metadata 中避免保存完整 raw payload，优先保存标准化摘要字段。
+
+#### 后续实现验收
+
+如果未来进入 R2 实现阶段，验收应包括：
+
+- `wrangler.toml` 增加 R2 binding，dev/preview/prod bucket 清晰区分。
+- Cache miss + R2 miss 时生成并写入 R2。
+- Cache miss + R2 hit 时返回产物并回填 Cache API。
+- 等价 payload 仍命中同一 stable hash。
+- 响应包含 `ETag`、`X-Chart-Hash`、`X-Chart-Cache`、`X-Chart-Storage`。
+- R2 object metadata 包含 hash、format、chart_type、renderer、width、height、created_at。
+- R2 不改变当前 `response_format=png` 的 unsupported 行为。
+- `/viewer` 行为不依赖 R2，R2 不可用时仍能走现有生成路径。
+
+当前 Phase 5 验收：
+
+- 第一阶段代码和 `wrangler.toml` 不包含 R2 binding。
+- 工程文档明确 R2 是后续可选升级，不影响 Cache API-only 交付。
+- 后续 agent 能基于本节直接设计 R2 binding、key schema、读写顺序和验收测试。
 
 ### GPT-Vis 1.0.0 Migration Research
 
@@ -488,12 +645,34 @@ R2 不在第一阶段实现，只作为后续可选持久层：
 - 第一阶段代码和 `wrangler.toml` 不包含 R2 binding。
 - 文档明确 R2 是后续可选升级，不影响 Cache API-only 交付。
 
-### Phase 6: Legacy Cleanup
+### Phase 6: Legacy Cleanup - Implemented
 
 - 删除或隔离 Node SSR 入口。
 - 移除 Dockerfile 和 docker-compose，或移到 `legacy/`。
 - 移除 `canvas`、`@antv/gpt-vis-ssr`、相关 lockfile 依赖。
 - 更新 README、API 文档、部署文档。
+
+实现说明：
+
+- `src/server.js` 已移动到 `legacy/node-ssr/server.js`。
+- `src/smoke.js` 已移动到 `legacy/node-ssr/smoke.js`。
+- 根目录 `Dockerfile`、`.dockerignore` 和 `docker-compose.yml` 已移动到 `legacy/node-ssr/`。
+- 根 `package.json` 已移除：
+  - `start`
+  - `start:env`
+  - `smoke`
+  - `canvas`
+  - `@antv/gpt-vis-ssr`
+- `package-lock.json` 已重新生成，根 package 不再包含 native `canvas` 依赖树。
+- `README.md`、`docs/README.md`、`docs/standalone-readiness.md` 已改为 Worker-first 文档。
+- `docs/agent-handoff.md` 已更新 legacy 入口位置。
+- `legacy/node-ssr/README.md` 说明历史服务仅作参考，不属于当前 install、scripts 或 Worker bundle。
+
+保留策略：
+
+- 旧 Node SSR 代码不直接删除，避免丢失历史实现和 summary canvas 参考逻辑。
+- legacy 目录没有独立 `package.json`，因此不会被根安装流程自动安装 native 依赖。
+- 如未来确需恢复 Node SSR，应在 `legacy/node-ssr/` 下建立单独 package boundary，不应把 `canvas` 加回根 package。
 
 验收：
 

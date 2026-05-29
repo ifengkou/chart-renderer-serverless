@@ -9,16 +9,9 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "start": "node src/server.js",
-    "start:env": "node --env-file=.env src/server.js",
     "audit": "npm audit --omit=dev --registry=https://registry.npmjs.org",
     "html:smoke": "node src/html-smoke.js",
-    "svg:smoke": "node src/svg-smoke.js",
-    "smoke": "node src/smoke.js"
-  },
-  "dependencies": {
-    "@antv/gpt-vis-ssr": "0.3.7",
-    "canvas": "^3.2.3"
+    "svg:smoke": "node src/svg-smoke.js"
   },
   "devDependencies": {
     "wrangler": "^4.0.0"
