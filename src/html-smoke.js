@@ -45,5 +45,6 @@ assert.match(viewer, /--chart-host-width/);
 assert.match(viewer, /\[chartType\.Waterfall \|\| "waterfall", gptVis\.Waterfall\]/);
 assert.match(viewer, /renderFallbackWaterfall\(chart\)/);
 assert.match(viewer, /data-chart-node="fallback-waterfall"/);
+assert.doesNotMatch(viewer, /Rendered with @antv\/gpt-vis/);
 
 console.log(JSON.stringify({ success: true, html_cases: 2 }));

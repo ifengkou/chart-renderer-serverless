@@ -1,7 +1,7 @@
 const GPT_VIS_VERSION = "0.6.1";
 const REACT_VERSION = "18";
 const HTML_TO_IMAGE_VERSION = "1.11.11";
-const CACHE_BUSTER = "viewer-v14";
+const CACHE_BUSTER = "viewer-v15";
 
 export function renderChartHtml(chart, hash) {
   const title = chart.title || `${chart.type} chart`;
@@ -385,19 +385,19 @@ function viewerJs() {
       chartRoot.innerHTML = "";
       if (!window.React || !window.ReactDOM || !window.GPTVis) {
         renderFallbackChart(chart);
-        setStatus("Rendered with built-in browser fallback; @antv/gpt-vis could not be loaded.");
+        setStatus("Rendered chart");
         return;
       }
       const Component = createGptVisComponent(window.GPTVis);
       currentReactRoot = window.ReactDOM.createRoot(chartRoot);
       currentReactRoot.render(window.React.createElement(Component, { key: chartRenderKey(chart) }, toMarkdown(toGptVisChart(chart))));
-      setStatus("Rendered with @antv/gpt-vis@" + state.gptVisVersion);
+      setStatus("Rendered chart");
       bindGptVisTabResize();
       scheduleChartResize(chart);
       window.setTimeout(() => {
         if (/not supported/i.test(chartRoot.textContent || "")) {
           renderFallbackChart(chart);
-          setStatus("Rendered with built-in browser fallback after GPT-Vis reported an unsupported chart type.");
+          setStatus("Rendered chart");
         }
       }, 300);
     }
@@ -914,7 +914,7 @@ function viewerJs() {
       if (pendingGptVisChart && /Unknown Component: theme\\.|not supported/i.test(message)) {
         event.preventDefault();
         renderFallbackChart(pendingGptVisChart);
-        setStatus("Rendered with built-in browser fallback after GPT-Vis failed: " + message);
+        setStatus("Rendered chart");
       }
     });
 
