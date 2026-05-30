@@ -1,7 +1,7 @@
 const GPT_VIS_VERSION = "0.6.1";
 const REACT_VERSION = "18";
 const HTML_TO_IMAGE_VERSION = "1.11.11";
-const CACHE_BUSTER = "viewer-v15";
+const CACHE_BUSTER = "viewer-v16";
 
 export function renderChartHtml(chart, hash) {
   const title = chart.title || `${chart.type} chart`;
@@ -414,6 +414,8 @@ function viewerJs() {
           [chartType.Radar || "radar", gptVis.Radar],
           [chartType.Waterfall || "waterfall", gptVis.Waterfall],
           [chartType.WordCloud || "word-cloud", gptVis.WordCloud],
+          [chartType.Liquid || "liquid", gptVis.Liquid],
+          [chartType.Table || "table", gptVis.Table],
           [chartType.Treemap || "treemap", gptVis.Treemap],
           [chartType.DualAxes || "dual-axes", gptVis.DualAxes],
           [chartType.Scatter || "scatter", gptVis.Scatter],
@@ -528,6 +530,10 @@ function viewerJs() {
         renderFallbackWaterfall(chart);
         return;
       }
+      if (chart.type === "liquid") {
+        renderFallbackLiquid(chart);
+        return;
+      }
       chartRoot.innerHTML =
         '<div class="fallback-card"><h2>' + escapeHtml(chart.title || chart.type + ' chart') + '</h2><pre>' +
         escapeHtml(JSON.stringify(chart, null, 2)) +
@@ -570,6 +576,53 @@ function viewerJs() {
         '<title>' + escapeHtml(chart.title || "Radar chart") + '</title><rect width="100%" height="100%" fill="' + colors.background + '"/>' +
         '<text x="24" y="28" font-size="22" font-weight="700" fill="' + colors.text + '">' + escapeHtml(chart.title || "Radar chart") + '</text>' +
         axis + polygons + '</svg>';
+      chartRoot.innerHTML = currentSvg;
+    }
+
+    function renderFallbackLiquid(chart) {
+      prepareChartFrame(chart);
+      const { width, height } = chartSize(chart);
+      const colors = themeColors[chartTheme(chart)];
+      const percent = Math.max(0, Math.min(1, Number(chart.percent ?? chart.options?.percent) || 0));
+      const shape = String(chart.shape || chart.options?.shape || "circle").toLowerCase();
+      const cx = width / 2;
+      const cy = height / 2 + 20;
+      const size = Math.min(width * 0.48, height * 0.56);
+      const left = cx - size / 2;
+      const top = cy - size / 2;
+      const fillTop = top + size * (1 - percent);
+      const fillHeight = size * percent;
+      const clipId = "liquid-clip";
+      const wavePath = [
+        "M", round(left), round(fillTop + 8),
+        "C", round(left + size * 0.18), round(fillTop - 10),
+        round(left + size * 0.32), round(fillTop + 22),
+        round(left + size * 0.5), round(fillTop + 6),
+        "S", round(left + size * 0.82), round(fillTop - 10),
+        round(left + size), round(fillTop + 8),
+        "L", round(left + size), round(top + size),
+        "L", round(left), round(top + size),
+        "Z"
+      ].join(" ");
+      const clipShape = shape === "rect"
+        ? '<rect x="' + round(left) + '" y="' + round(top) + '" width="' + round(size) + '" height="' + round(size) + '" rx="28"/>'
+        : '<circle cx="' + round(cx) + '" cy="' + round(cy) + '" r="' + round(size / 2) + '"/>';
+      const outline = shape === "rect"
+        ? '<rect data-chart-node="fallback-liquid" x="' + round(left) + '" y="' + round(top) + '" width="' + round(size) + '" height="' + round(size) + '" rx="28" fill="none" stroke="#2563eb" stroke-width="8"/>'
+        : '<circle data-chart-node="fallback-liquid" cx="' + round(cx) + '" cy="' + round(cy) + '" r="' + round(size / 2) + '" fill="none" stroke="#2563eb" stroke-width="8"/>';
+      currentSvg = '<svg xmlns="http://www.w3.org/2000/svg" role="img" viewBox="0 0 ' + width + ' ' + height + '" width="' + width + '" height="' + height + '">' +
+        '<title>' + escapeHtml(chart.title || "Liquid chart") + '</title>' +
+        '<rect width="100%" height="100%" fill="' + colors.background + '"/>' +
+        '<text x="24" y="34" font-size="22" font-weight="700" fill="' + colors.text + '">' + escapeHtml(chart.title || "Liquid chart") + '</text>' +
+        '<defs><clipPath id="' + clipId + '">' + clipShape + '</clipPath></defs>' +
+        '<g clip-path="url(#' + clipId + ')">' +
+        '<rect x="' + round(left) + '" y="' + round(top) + '" width="' + round(size) + '" height="' + round(size) + '" fill="#dbeafe"/>' +
+        '<rect x="' + round(left) + '" y="' + round(fillTop) + '" width="' + round(size) + '" height="' + round(fillHeight) + '" fill="#60a5fa" opacity="0.9"/>' +
+        '<path d="' + wavePath + '" fill="#2563eb" opacity="0.9"/>' +
+        '</g>' +
+        outline +
+        '<text x="' + round(cx) + '" y="' + round(cy + 12) + '" text-anchor="middle" font-size="42" font-weight="800" fill="' + colors.text + '">' + Math.round(percent * 100) + '%</text>' +
+        '</svg>';
       chartRoot.innerHTML = currentSvg;
     }
 

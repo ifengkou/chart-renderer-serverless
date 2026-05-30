@@ -30,8 +30,7 @@ CHART-001 Node.js PNG SSR API 已标记为 legacy。旧的 `image_base64` 和 `i
 4. 简单图表需要可嵌入或下载的矢量产物时，请求 `response_format: "svg"`。
 5. 复杂图表需要浏览器端渲染页面时，请求 `response_format: "html"`。
 6. 不要向 Worker 请求 PNG；需要 PNG 时应在浏览器端基于 SVG/HTML/config 导出。
-5. 如果返回 422，根据 `message` 修正字段后重试。
-6. 如果返回 501，说明该 response format 属于后续阶段能力，应降级为 `config` 或交给调用方前端处理。
+7. 如果返回 422，根据 `message` 修正字段后重试。`unsupported_response_format` 表示请求了 Worker 不支持的格式，例如 PNG。
 
 ## GET /health
 
@@ -52,7 +51,7 @@ Host: 127.0.0.1:8787
   "service": "chart-renderer",
   "version": "0.2.0",
   "runtime": "cloudflare-worker",
-  "formats": ["config", "svg"],
+  "formats": ["config", "svg", "html"],
   "planned_formats": [],
   "simple_svg_types": ["line", "bar", "column", "pie", "summary"]
 }
@@ -79,7 +78,7 @@ Worker 直接返回浏览器端 viewer 页面。
 - 使用 `@antv/gpt-vis@0.6.1` 在浏览器端渲染复杂图表。
 - 下载 JSON config、SVG、PNG。
 
-如果 GPT-Vis CDN 加载失败，或 GPT-Vis 报告当前图表类型不支持，页面会使用内置浏览器 fallback renderer。当前 fallback 已覆盖 `radar`。
+如果 GPT-Vis CDN 加载失败，或 GPT-Vis 报告当前图表类型不支持，页面会使用内置浏览器 fallback renderer。当前 fallback 已覆盖 `radar`、`waterfall` 和 `liquid`。
 
 ### 支持的 type
 
@@ -128,7 +127,7 @@ Worker 直接返回浏览器端 viewer 页面。
 | `type` | 选择渲染模板。必须使用“支持的 type”表中的值；服务会把大小写归一化，并处理少量别名。 | `{"type": "column"}` 或 `{"type": "Word Cloud"}`。 |
 | `data` | 图表数据数组。字段名由 `type` 决定，服务不会自动从 `date/price` 映射到 `time/value`。 | `line` 使用 `[{"time":"2026-05-01","value":1.12}]`。 |
 | `title` | 图表标题。建议短句，避免把长解释文字放入标题。 | `"title": "Token price"`。 |
-| `width` / `height` | 图表产物尺寸契约：Worker SVG、HTML shell 中的 GPT-Vis 图表、浏览器下载的 SVG/PNG 都应以这组尺寸为目标。预览容器只跟随并容纳图表，不作为缩放图表的来源。默认 `900x520` 适合报告正文；最小 `100`，最大 `4096`。 | 缩略图可用 `{"width": 480, "height": 280}`。 |
+| `width` / `height` | 图表产物尺寸契约：Worker SVG、HTML shell 中的 GPT-Vis 图表、浏览器下载的 SVG/PNG 都应以这组尺寸为目标。预览容器只负责容纳图表；图表超过右侧区域时由容器提供滚动条，不作为缩放图表的来源。默认 `900x520` 适合报告正文；最小 `100`，最大 `4096`。 | 缩略图可用 `{"width": 480, "height": 280}`。 |
 | `theme` | 视觉主题。`default` 是 Light；`dark` 用于深色报告或暗色背景；`academy` 用于更偏学术/报告风格的浅色图。 | `{"theme": "dark"}`。 |
 | `percent` | `liquid` 专用进度值，范围 `0..1`。不要传百分数字符串。 | `{"type":"liquid","percent":0.72}` 表示 72%。 |
 | `shape` | `liquid` 专用形状，也可写在 `options.shape`。 | `"shape": "circle"`。 |
@@ -295,7 +294,7 @@ HTML shell 包含 JSON、SVG、PNG 下载按钮。复杂图表在浏览器端通
 - `/viewer` 浏览器端渲染复杂图表时，会把 `theme` 字段传给 GPT-Vis；`@antv/gpt-vis@0.6.1` 支持 `default`、`dark`、`academy` 主题。
 - `/viewer` 提供 Theme、W、H 和 Apply 控件；只有点击 Apply，或在 W/H 输入框按 Enter，才会把控件值同步到 payload 并重新渲染；这些控件在左侧边栏分行排布，避免窄宽度下溢出。
 - `/viewer` 的页面预览容器保持中性的白色工作区，不随 `theme` 改变；`theme` 只传给图表渲染逻辑。
-- `/viewer` 将 `width`、`height` 作为图表渲染尺寸和下载尺寸；预览容器跟随图表尺寸扩展，只负责完整展示图表，不作为图表缩放来源。
+- `/viewer` 将 `width`、`height` 作为图表渲染尺寸和下载尺寸；右侧预览容器铺满内容区并提供滚动条，不作为图表缩放来源。
 - `/viewer` 在 GPT-Vis 渲染后触发 resize/reflow；页面只约束 GPT-Vis 工作区以便库完成正确测量，不再强行拉伸 canvas，避免图表变形或回落到内部默认小尺寸。
 - 下载 SVG 时，页面优先序列化真正的图表 SVG；如果当前复杂图表由 canvas 渲染，则导出一个包含 canvas PNG data URL 的 SVG 包装。下载 PNG 时，页面优先导出真正的图表 canvas 或 SVG，而不是工具栏图标。
 
@@ -303,9 +302,11 @@ HTML shell 包含 JSON、SVG、PNG 下载按钮。复杂图表在浏览器端通
 
 以下 `image_base64` 和 `image/png` 响应只适用于历史 Node.js SSR 服务，不属于 Cloudflare Worker 版本当前契约。历史实现已隔离到 `legacy/node-ssr/`，根安装和 Worker bundle 不再包含 `canvas` 或 `@antv/gpt-vis-ssr`。
 
-### PNG Response 200
+### Historical Node SSR PNG Response 200
 
-当请求体包含 `"response_format": "png"`，或请求头包含 `Accept: image/png` 时，响应体为 PNG binary。
+以下内容仅用于理解历史 Node SSR 服务。当前 Cloudflare Worker 不会返回 PNG binary；当请求体包含 `"response_format": "png"`，或请求头包含 `Accept: image/png` 时，Worker 返回 `422 unsupported_response_format`。
+
+历史 Node SSR 服务中，PNG 请求响应体为 PNG binary。
 
 响应头包含基础 metadata：
 
@@ -343,15 +344,15 @@ curl -s -X POST http://127.0.0.1:8787/render \
   }'
 ```
 
-### Bar Chart，PNG 响应
+### Bar Chart，SVG 响应
 
 ```bash
 curl -s -X POST http://127.0.0.1:8787/render \
   -H "Content-Type: application/json" \
-  -H "Accept: image/png" \
   -d '{
     "type": "bar",
     "title": "Volume by exchange",
+    "response_format": "svg",
     "width": 900,
     "height": 520,
     "data": [
@@ -363,11 +364,10 @@ curl -s -X POST http://127.0.0.1:8787/render \
       "axisXTitle": "Exchange",
       "axisYTitle": "Volume"
     }
-  }' \
-  -o /tmp/chart-renderer-bar.png
+  }'
 ```
 
-### Pie Chart，请求体指定 PNG
+### Pie Chart，SVG 响应
 
 ```bash
 curl -s -X POST http://127.0.0.1:8787/render \
@@ -375,7 +375,7 @@ curl -s -X POST http://127.0.0.1:8787/render \
   -d '{
     "type": "pie",
     "title": "Holder segments",
-    "response_format": "png",
+    "response_format": "svg",
     "data": [
       {"category": "Top 10", "value": 42},
       {"category": "Top 100", "value": 33},
@@ -384,30 +384,28 @@ curl -s -X POST http://127.0.0.1:8787/render \
     "options": {
       "innerRadius": 0
     }
-  }' \
-  -o /tmp/chart-renderer-pie.png
+  }'
 ```
 
-### Column Chart，Dark Theme
+### Column Chart，Dark Theme，Config 响应
 
 ```bash
 curl -s -X POST http://127.0.0.1:8787/render \
   -H "Content-Type: application/json" \
-  -H "Accept: image/png" \
   -d '{
     "type": "Column",
     "theme": "dark",
+    "response_format": "config",
     "title": "Monthly volume",
     "data": [
       {"category": "Jan", "value": 120},
       {"category": "Feb", "value": 180},
       {"category": "Mar", "value": 150}
     ]
-  }' \
-  -o /tmp/chart-renderer-column-dark.png
+  }'
 ```
 
-### Liquid Chart
+### Liquid Chart，HTML 响应
 
 ```bash
 curl -s -X POST http://127.0.0.1:8787/render \
@@ -417,12 +415,11 @@ curl -s -X POST http://127.0.0.1:8787/render \
     "title": "Liquidity coverage",
     "percent": 0.72,
     "shape": "circle",
-    "response_format": "png"
-  }' \
-  -o /tmp/chart-renderer-liquid.png
+    "response_format": "html"
+  }'
 ```
 
-### Table Chart
+### Table Chart，HTML 响应
 
 ```bash
 curl -s -X POST http://127.0.0.1:8787/render \
@@ -430,7 +427,7 @@ curl -s -X POST http://127.0.0.1:8787/render \
   -d '{
     "type": "table",
     "title": "Key metrics",
-    "response_format": "png",
+    "response_format": "html",
     "data": [
       {"metric": "Price", "value": "$1.12"},
       {"metric": "Volume", "value": "$1.28M"}
@@ -438,11 +435,10 @@ curl -s -X POST http://127.0.0.1:8787/render \
     "options": {
       "columns": ["metric", "value"]
     }
-  }' \
-  -o /tmp/chart-renderer-table.png
+  }'
 ```
 
-### Summary Cards
+### Summary Cards，SVG 响应
 
 ```bash
 curl -s -X POST http://127.0.0.1:8787/render \
@@ -451,14 +447,36 @@ curl -s -X POST http://127.0.0.1:8787/render \
     "type": "summary",
     "theme": "academy",
     "title": "Token snapshot",
-    "response_format": "png",
+    "response_format": "svg",
     "data": [
       {"label": "Price", "value": "$1.12", "delta": "+3.4%"},
       {"label": "Volume", "value": "$1.28M", "delta": "-2.1%"},
       {"label": "Risk", "value": "Medium", "description": "Liquidity concentration remains elevated."}
     ]
-  }' \
-  -o /tmp/chart-renderer-summary.png
+  }'
+```
+
+### PNG 请求，Worker 返回 422
+
+```bash
+curl -s -X POST http://127.0.0.1:8787/render \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "line",
+    "response_format": "png",
+    "data": [
+      {"time": "2026-05-01", "value": 1.12}
+    ]
+  }'
+```
+
+响应：
+
+```json
+{
+  "error": "unsupported_response_format",
+  "message": "Server-side PNG rendering is not supported in the Worker version. Use svg/html/config and download PNG in the browser."
+}
 ```
 
 ## 错误响应
@@ -477,6 +495,7 @@ curl -s -X POST http://127.0.0.1:8787/render \
 | 400 | `bad_request` | body 为空、JSON 非法、body 超过上限 | 修正请求体或缩小数据量后重试。 |
 | 404 | `not_found` | 路径或方法错误 | 改用 `GET /health` 或 `POST /render`。 |
 | 422 | `invalid_chart_payload` | 缺少 `type`、`data` 为空、尺寸非法、`theme` 非法、`liquid.percent` 非法、`options` 非对象 | 根据 `message` 修正 payload。 |
+| 422 | `unsupported_response_format` | 请求了 `response_format: "png"` 或 `Accept: image/png` | 改用 `config`、`svg` 或 `html`；需要 PNG 时使用 `/viewer` 在浏览器端下载。 |
 | 500 | `render_failed` | 渲染失败 | 检查 `type` 是否在本服务支持列表内、字段是否匹配该 type schema、数据规模是否过大；必要时 fallback。 |
 | 500 | `internal_error` | 未预期内部错误 | 记录错误并交给上游告警或 fallback。 |
 
@@ -547,13 +566,13 @@ paths:
                   description: Short chart title.
                 width:
                   type: integer
-                  description: Output image width in pixels.
+                  description: Chart artifact width in pixels. Used by Worker SVG, HTML shell rendering, and browser-side downloads.
                   minimum: 100
                   maximum: 4096
                   default: 900
                 height:
                   type: integer
-                  description: Output image height in pixels.
+                  description: Chart artifact height in pixels. Used by Worker SVG, HTML shell rendering, and browser-side downloads.
                   minimum: 100
                   maximum: 4096
                   default: 520
@@ -578,8 +597,8 @@ paths:
                   additionalProperties: true
                 response_format:
                   type: string
-                  description: Worker response format. config returns normalized JSON config; svg returns Worker SVG for simple charts; html returns browser-rendered HTML shell. png is legacy and returns 422 in Worker.
-                  enum: [config, svg, html, png]
+                  description: Worker response format. config returns normalized JSON config; svg returns Worker SVG for simple charts; html returns browser-rendered HTML shell. PNG is not supported by the Worker; response_format=png returns 422 unsupported_response_format.
+                  enum: [config, svg, html]
                   default: config
       responses:
         "200":
@@ -598,7 +617,7 @@ paths:
         "400":
           description: Bad request
         "422":
-          description: Invalid chart payload
+          description: Invalid chart payload, unsupported SVG chart type, or unsupported response format such as PNG
         "500":
           description: Internal error
 ```

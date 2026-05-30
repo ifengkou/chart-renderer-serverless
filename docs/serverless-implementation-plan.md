@@ -408,7 +408,7 @@ R2 不在第一阶段实现，只作为后续可选持久层：
 
 - 实现复杂图表 HTML shell，`response_format: "html"` 返回 `text/html; charset=utf-8`。
 - HTML shell 引入 `@antv/gpt-vis@0.6.1` UMD 浏览器脚本，并用 `vis-chart` markdown block 渲染图表。
-- 对 GPT-Vis 默认组件不支持或 CDN 加载失败的场景，提供内置浏览器 fallback renderer，已覆盖 `radar`。
+- 对 GPT-Vis 默认组件不支持或 CDN 加载失败的场景，提供内置浏览器 fallback renderer，已覆盖 `radar`、`waterfall` 和 `liquid`。
 - 提供 JSON、SVG、PNG 下载能力：
   - JSON 下载当前标准化 config。
   - SVG 优先序列化当前页面内真正的图表 SVG；简单图表也可请求 Worker SVG；复杂 canvas 图表导出为包含 canvas PNG data URL 的 SVG 包装。
@@ -482,10 +482,10 @@ charts/{artifact_namespace}/{format}/{hash}.metadata.json
 示例：
 
 ```text
-charts/worker-v15/svg/sha256:abc123
-charts/worker-v15/html/sha256:abc123
-charts/worker-v15/config/sha256:abc123
-charts/worker-v15/config/sha256:abc123.metadata.json
+charts/worker-v16/svg/sha256:abc123
+charts/worker-v16/html/sha256:abc123
+charts/worker-v16/config/sha256:abc123
+charts/worker-v16/config/sha256:abc123.metadata.json
 ```
 
 metadata 建议字段：
@@ -501,7 +501,7 @@ metadata 建议字段：
   "theme": "default",
   "content_type": "image/svg+xml; charset=utf-8",
   "created_at": "2026-05-29T00:00:00.000Z",
-  "artifact_namespace": "worker-v15"
+  "artifact_namespace": "worker-v16"
 }
 ```
 
@@ -637,7 +637,7 @@ GET /artifact/:hash
 - 真实浏览器加载 `https://cdn.jsdelivr.net/npm/@antv/gpt-vis@0.6.1/dist/umd/index.min.js` 后，当前 `vis-chart` markdown block 渲染链路可继续生成图表 canvas。
 - Theme、W、H 控件仍能同步到 payload；预览容器保持白色工作区。
 - SVG/PNG 下载按钮验证通过。
-- Cache API 在 `worker-v15` namespace 下验证通过，同一语义 payload 第二次请求返回 `X-Chart-Cache: hit`。
+- Cache API 在 `worker-v16` namespace 下验证通过，同一语义 payload 第二次请求返回 `X-Chart-Cache: hit`。
 - 记录需要新增的 binding、key 设计、metadata 和验收思路。
 
 验收：
