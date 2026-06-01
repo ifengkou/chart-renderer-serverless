@@ -2,7 +2,9 @@
 
 本文档面向调用 `chart-renderer` 的 agent、上游服务和自动化脚本。
 
-当前目标 API 是 CHART-002 Cloudflare Worker 版本：服务不再在服务端生成 PNG，而是返回 SVG、HTML 或标准化 config。Phase 1 已实现 Worker skeleton 和 `config` 响应；Phase 2 已实现简单图表 SVG；Phase 3 已实现 HTML shell 和 `/viewer`；Phase 4 已实现 Cache API 缓存。
+当前目标 API 是 CHART-002 Cloudflare Worker 版本：服务不再在服务端生成 PNG，而是返回 SVG、HTML 或标准化 config。Phase 1 已实现 Worker skeleton 和 `config` 响应；Phase 2 已实现简单图表 SVG；Phase 3 已实现 HTML shell 和 `/viewer`；Phase 4 已实现 Cache API 缓存。当前还提供由 Worker 直接返回的在线 API 文档页面。
+
+Cloudflare API Shield / Schema Validation 可导入 [`docs/openapi.yaml`](./openapi.yaml)。建议先以 log 模式观察，再切换为 block。
 
 CHART-001 Node.js PNG SSR API 已标记为 legacy。旧的 `image_base64` 和 `image/png` 行为只属于历史 Node SSR 服务，不是 Worker 版本的当前契约。
 
@@ -10,7 +12,10 @@ CHART-001 Node.js PNG SSR API 已标记为 legacy。旧的 `image_base64` 和 `i
 
 - Base URL：`http://127.0.0.1:8787`，容器网络内通常使用服务名和端口，例如 `http://chart-renderer:8787`。
 - 健康检查：`GET /health`。
+- 在线 API 文档：`GET /api`，别名 `GET /docs/api`。
 - 渲染图表：`POST /render`。
+- 浏览器 viewer：`GET /viewer`。
+- 品牌资源：`GET /logo.svg`、`GET /favicon.svg`、`GET /favicon.ico`。
 - 默认响应：JSON config，包含 `hash`、`renderer`、`format`、`chart` 和 `metadata`。
 - 支持 `response_format: "config"`。
 - 支持简单图表 `response_format: "svg"`：`line`、`bar`、`column`、`pie`、`summary`。
@@ -63,6 +68,52 @@ Host: 127.0.0.1:8787
 - `runtime` 为 `cloudflare-worker` 时，应按 CHART-002 契约处理响应。
 - `formats` 表示当前已实现格式，`planned_formats` 表示后续阶段能力。
 
+## GET /api
+
+Worker 直接返回 HTML API 文档页面，方便部署后把 API 说明和调试入口一起暴露出来。
+
+别名：
+
+- `GET /api`
+- `GET /docs/api`
+
+页面包含：
+
+- 当前运行时、版本和响应格式概览。
+- `GET /health`、`GET /viewer`、`POST /render`、品牌资源路由说明。
+- `POST /render` 请求字段、响应格式、错误码。
+- 常用 curl 示例。
+
+### Request
+
+```http
+GET /api HTTP/1.1
+Host: 127.0.0.1:8787
+```
+
+### Response 200
+
+```http
+HTTP/1.1 200 OK
+Content-Type: text/html; charset=utf-8
+```
+
+## GET /logo.svg 和 /favicon.svg
+
+Worker 提供内置品牌资源：
+
+| 路径 | Content-Type | 说明 |
+| --- | --- | --- |
+| `GET /logo.svg` | `image/svg+xml; charset=utf-8` | 横版 `chart-renderer` logo。当前 `/viewer` 顶栏使用该资源。 |
+| `GET /favicon.svg` | `image/svg+xml; charset=utf-8` | SVG favicon。HTML shell 已在 `<head>` 中引用。 |
+| `GET /favicon.ico` | `image/svg+xml; charset=utf-8` | 兼容浏览器默认 favicon 探测，返回同一 SVG。 |
+
+这些资源使用长期缓存：
+
+```http
+Cache-Control: public, max-age=31536000, immutable
+```
+
 ## POST /render
 
 把 chart payload 标准化为可供浏览器端渲染的 config，或为简单图表生成 SVG。Worker 不做服务端 PNG。
@@ -77,6 +128,7 @@ Worker 直接返回浏览器端 viewer 页面。
 - 请求 `config`、`svg`、`html` 三种格式。
 - 使用 `@antv/gpt-vis@0.6.1` 在浏览器端渲染复杂图表。
 - 下载 JSON config、SVG、PNG。
+- 顶栏使用 `GET /logo.svg`，页面 favicon 使用 `GET /favicon.svg`。
 
 如果 GPT-Vis CDN 加载失败，或 GPT-Vis 报告当前图表类型不支持，页面会使用内置浏览器 fallback renderer。当前 fallback 已覆盖 `radar`、`waterfall` 和 `liquid`。
 

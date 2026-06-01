@@ -1,0 +1,493 @@
+openapi: 3.1.0
+info:
+  title: chart-renderer API
+  version: 0.2.0
+  summary: Cloudflare Worker chart artifact API
+  description: >
+    Serverless chart renderer API. The Worker returns normalized chart config,
+    simple SVG, or an HTML shell for browser-side rendering. Server-side PNG
+    rendering is not supported; PNG export is handled in the browser viewer.
+servers:
+  - url: https://chart.95id.com
+    description: Replace with your production Worker custom domain.
+  - url: http://127.0.0.1:8787
+    description: Local wrangler dev.
+tags:
+  - name: Health
+  - name: Render
+  - name: Pages
+  - name: Assets
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Worker health check
+      operationId: getHealth
+      responses:
+        "200":
+          description: Worker runtime metadata.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+  /render:
+    post:
+      tags: [Render]
+      summary: Render chart artifact
+      operationId: renderChart
+      description: >
+        Returns chart config by default. Simple chart types can return SVG.
+        Complex chart types should use config or HTML. PNG is explicitly
+        unsupported in the Worker runtime.
+      parameters:
+        - name: Accept
+          in: header
+          required: false
+          schema:
+            type: string
+            enum:
+              - application/json
+              - image/svg+xml
+              - text/html
+              - image/png
+          description: >
+            image/png is documented only so gateways can detect and block it;
+            the Worker returns 422 unsupported_response_format for PNG.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChartRenderRequest"
+            examples:
+              lineSvg:
+                summary: Simple line SVG
+                value:
+                  type: line
+                  response_format: svg
+                  title: Token price
+                  width: 900
+                  height: 520
+                  theme: default
+                  data:
+                    - time: "2026-05-01"
+                      value: 1.12
+                    - time: "2026-05-02"
+                      value: 1.18
+              radarConfig:
+                summary: Complex radar config
+                value:
+                  type: radar
+                  response_format: config
+                  title: Risk profile
+                  width: 900
+                  height: 520
+                  theme: default
+                  data:
+                    - group: Token A
+                      name: Liquidity
+                      value: 80
+                    - group: Token A
+                      name: Risk
+                      value: 40
+              liquidHtml:
+                summary: Liquid HTML shell
+                value:
+                  type: liquid
+                  response_format: html
+                  title: Liquidity coverage
+                  percent: 0.72
+                  shape: circle
+      responses:
+        "200":
+          description: Chart artifact response.
+          headers:
+            ETag:
+              schema:
+                type: string
+              description: Stable payload hash.
+            X-Chart-Hash:
+              schema:
+                type: string
+              description: Stable payload hash.
+            X-Chart-Type:
+              schema:
+                type: string
+              description: Normalized chart type.
+            X-Chart-Renderer:
+              schema:
+                type: string
+                enum: [client-config, worker-svg, client-html]
+              description: Renderer selected by the Worker.
+            X-Chart-Cache:
+              schema:
+                type: string
+                enum: [miss, hit]
+              description: Cache API result.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConfigResponse"
+            image/svg+xml:
+              schema:
+                type: string
+                description: SVG document.
+            text/html:
+              schema:
+                type: string
+                description: Browser-rendered chart HTML shell.
+        "400":
+          description: Bad JSON body or request body constraint failure.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: Invalid payload, unsupported SVG type, or unsupported PNG request.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/ErrorResponse"
+                  - $ref: "#/components/schemas/UnsupportedSvgTypeError"
+              examples:
+                pngUnsupported:
+                  value:
+                    error: unsupported_response_format
+                    message: Server-side PNG rendering is not supported in the Worker version. Use svg/html/config and download PNG in the browser.
+                unsupportedSvg:
+                  value:
+                    error: unsupported_svg_chart_type
+                    message: "SVG rendering is not supported for chart type: radar. Use response_format=config or html."
+                    hash: sha256:example
+                    chart_type: radar
+  /viewer:
+    get:
+      tags: [Pages]
+      summary: Browser viewer page
+      operationId: getViewer
+      responses:
+        "200":
+          description: Viewer HTML page.
+          content:
+            text/html:
+              schema:
+                type: string
+  /api:
+    get:
+      tags: [Pages]
+      summary: Published API documentation page
+      operationId: getApiDocs
+      responses:
+        "200":
+          description: API docs HTML page.
+          content:
+            text/html:
+              schema:
+                type: string
+  /docs/api:
+    get:
+      tags: [Pages]
+      summary: API documentation page alias
+      operationId: getApiDocsAlias
+      responses:
+        "200":
+          description: API docs HTML page.
+          content:
+            text/html:
+              schema:
+                type: string
+  /logo.svg:
+    get:
+      tags: [Assets]
+      summary: Logo SVG
+      operationId: getLogo
+      responses:
+        "200":
+          description: Logo SVG.
+          content:
+            image/svg+xml:
+              schema:
+                type: string
+  /favicon.svg:
+    get:
+      tags: [Assets]
+      summary: Favicon SVG
+      operationId: getFavicon
+      responses:
+        "200":
+          description: Favicon SVG.
+          content:
+            image/svg+xml:
+              schema:
+                type: string
+  /favicon.ico:
+    get:
+      tags: [Assets]
+      summary: Favicon compatibility route
+      operationId: getFaviconIco
+      responses:
+        "200":
+          description: Favicon SVG returned for browser compatibility.
+          content:
+            image/svg+xml:
+              schema:
+                type: string
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - status
+        - service
+        - version
+        - runtime
+        - formats
+        - planned_formats
+        - simple_svg_types
+      properties:
+        status:
+          const: ok
+        service:
+          const: chart-renderer
+        version:
+          type: string
+        runtime:
+          const: cloudflare-worker
+        formats:
+          type: array
+          items:
+            enum: [config, svg, html]
+        planned_formats:
+          type: array
+          items:
+            type: string
+        simple_svg_types:
+          type: array
+          items:
+            enum: [line, bar, column, pie, summary]
+    ChartRenderRequest:
+      oneOf:
+        - $ref: "#/components/schemas/ArrayDataChartRequest"
+        - $ref: "#/components/schemas/LiquidChartRequest"
+      discriminator:
+        propertyName: type
+    ArrayDataChartRequest:
+      type: object
+      additionalProperties: false
+      required: [type, data]
+      properties:
+        type:
+          $ref: "#/components/schemas/ChartType"
+        data:
+          type: array
+          minItems: 1
+          maxItems: 5000
+          items:
+            type: object
+            additionalProperties:
+              anyOf:
+                - type: string
+                - type: number
+                - type: integer
+                - type: boolean
+                - type: "null"
+          description: >
+            Data schema depends on chart type. Common fields include time/value,
+            category/value, text/value, group/name/value, or table-like object
+            rows.
+        title:
+          type: string
+          maxLength: 160
+        width:
+          type: integer
+          minimum: 100
+          maximum: 4096
+          default: 900
+        height:
+          type: integer
+          minimum: 100
+          maximum: 4096
+          default: 520
+        theme:
+          $ref: "#/components/schemas/Theme"
+        options:
+          $ref: "#/components/schemas/ChartOptions"
+        response_format:
+          $ref: "#/components/schemas/ResponseFormat"
+    LiquidChartRequest:
+      type: object
+      additionalProperties: false
+      required: [type]
+      properties:
+        type:
+          enum: [liquid, Liquid]
+        percent:
+          type: number
+          minimum: 0
+          maximum: 1
+        title:
+          type: string
+          maxLength: 160
+        width:
+          type: integer
+          minimum: 100
+          maximum: 4096
+          default: 900
+        height:
+          type: integer
+          minimum: 100
+          maximum: 4096
+          default: 520
+        theme:
+          $ref: "#/components/schemas/Theme"
+        shape:
+          type: string
+          enum: [circle, rect, pin, triangle]
+        options:
+          allOf:
+            - $ref: "#/components/schemas/ChartOptions"
+            - type: object
+              properties:
+                percent:
+                  type: number
+                  minimum: 0
+                  maximum: 1
+                shape:
+                  type: string
+                  enum: [circle, rect, pin, triangle]
+          description: Liquid can provide percent/shape either at top level or in options.
+        response_format:
+          $ref: "#/components/schemas/ResponseFormat"
+      anyOf:
+        - required: [percent]
+        - required: [options]
+    ChartType:
+      type: string
+      enum:
+        - line
+        - area
+        - bar
+        - column
+        - pie
+        - waterfall
+        - word-cloud
+        - Word Cloud
+        - wordcloud
+        - word_cloud
+        - liquid
+        - radar
+        - table
+        - spreadsheet
+        - summary
+    Theme:
+      type: string
+      enum: [default, light, dark, academy]
+      default: default
+    ResponseFormat:
+      type: string
+      enum: [config, svg, html, png]
+      default: config
+      description: png is intentionally unsupported by the Worker and returns 422.
+    ChartOptions:
+      type: object
+      additionalProperties: true
+      properties:
+        theme:
+          $ref: "#/components/schemas/Theme"
+        axisXTitle:
+          type: string
+          maxLength: 80
+        axisYTitle:
+          type: string
+          maxLength: 80
+        group:
+          type: boolean
+        stack:
+          type: boolean
+        innerRadius:
+          type: number
+          minimum: 0
+          maximum: 1
+        columns:
+          type: array
+          items:
+            type: string
+        rows:
+          type: array
+          items:
+            type: string
+        values:
+          type: array
+          items:
+            type: string
+        style:
+          type: object
+          additionalProperties: true
+    ConfigResponse:
+      type: object
+      additionalProperties: false
+      required: [success, hash, renderer, format, chart, metadata]
+      properties:
+        success:
+          const: true
+        hash:
+          type: string
+          pattern: "^sha256:[a-f0-9]{64}$"
+        renderer:
+          const: client-config
+        format:
+          const: config
+        chart:
+          type: object
+          additionalProperties: true
+          required: [type, width, height, theme, options]
+          properties:
+            type:
+              type: string
+            width:
+              type: integer
+            height:
+              type: integer
+            theme:
+              type: string
+            options:
+              type: object
+        metadata:
+          type: object
+          additionalProperties: false
+          required: [cache, runtime]
+          properties:
+            cache:
+              enum: [miss, hit]
+            runtime:
+              const: cloudflare-worker
+    ErrorResponse:
+      type: object
+      additionalProperties: true
+      required: [error, message]
+      properties:
+        error:
+          type: string
+          enum:
+            - bad_request
+            - not_found
+            - invalid_chart_payload
+            - unsupported_response_format
+            - internal_error
+        message:
+          type: string
+    UnsupportedSvgTypeError:
+      type: object
+      additionalProperties: false
+      required: [error, message, hash, chart_type]
+      properties:
+        error:
+          const: unsupported_svg_chart_type
+        message:
+          type: string
+        hash:
+          type: string
+        chart_type:
+          type: string

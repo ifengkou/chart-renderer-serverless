@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { renderApiDocsHtml } from "./renderers/api-docs.js";
 import { renderChartHtml, renderViewerHtml } from "./renderers/html-shell.js";
 
 const chart = {
@@ -54,4 +55,12 @@ assert.match(viewer, /renderFallbackLiquid\(chart\)/);
 assert.match(viewer, /data-chart-node="fallback-liquid"/);
 assert.doesNotMatch(viewer, /Rendered with @antv\/gpt-vis/);
 
-console.log(JSON.stringify({ success: true, html_cases: 2 }));
+const apiDocs = renderApiDocsHtml();
+assert.match(apiDocs, /^<!doctype html>/);
+assert.match(apiDocs, /Chart Renderer API/);
+assert.match(apiDocs, /href="\/viewer"/);
+assert.match(apiDocs, /POST \/render/);
+assert.match(apiDocs, /\/docs\/api/);
+assert.match(apiDocs, /response_format=png/);
+
+console.log(JSON.stringify({ success: true, html_cases: 3 }));

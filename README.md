@@ -8,6 +8,7 @@ The active runtime is serverless. It does not render PNG on the server and does 
 
 - Implementation, configuration, usage, and current status: `docs/README.md`
 - Agent-facing API reference: `docs/api.md`
+- OpenAPI schema for Cloudflare API Shield: `docs/openapi.yaml`
 - Agent handoff and implementation map: `docs/agent-handoff.md`
 - CHART-002 Cloudflare Worker serverless migration plan: `docs/serverless-implementation-plan.md`
 - Legacy CHART-001 Node SSR plan: `docs/implementation-plan.md`
@@ -34,6 +35,8 @@ npm run deploy
 
 - `GET /health`: Worker health and runtime metadata.
 - `GET /viewer`: browser viewer for editing payloads, rendering charts, and downloading JSON/SVG/PNG.
+- `GET /api`: published API documentation page. `GET /docs/api` is an alias.
+- `GET /logo.svg`, `GET /favicon.svg`: built-in brand assets.
 - `POST /render`: returns `config`, `svg`, or `html`.
 
 Example:

@@ -1,4 +1,5 @@
 import { FAVICON_SVG, LOGO_SVG } from "./assets.js";
+import { renderApiDocsHtml } from "./renderers/api-docs.js";
 import { renderChartHtml, renderViewerHtml } from "./renderers/html-shell.js";
 import { canRenderSvg, renderSvg, SIMPLE_SVG_TYPES } from "./renderers/svg.js";
 
@@ -46,6 +47,15 @@ export default {
         });
       }
 
+      if (request.method === "GET" && (url.pathname === "/api" || url.pathname === "/docs/api")) {
+        return new Response(renderApiDocsHtml(), {
+          status: 200,
+          headers: {
+            "Content-Type": "text/html; charset=utf-8"
+          }
+        });
+      }
+
       if (request.method === "GET" && (url.pathname === "/favicon.svg" || url.pathname === "/favicon.ico")) {
         return svgAssetResponse(FAVICON_SVG);
       }
@@ -57,7 +67,7 @@ export default {
       if (request.method !== "POST" || url.pathname !== "/render") {
         return jsonResponse(404, {
           error: "not_found",
-          message: "Use GET /health, GET /viewer, or POST /render"
+          message: "Use GET /health, GET /viewer, GET /api, or POST /render"
         });
       }
 

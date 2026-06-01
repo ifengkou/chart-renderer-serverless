@@ -1,6 +1,7 @@
 name = "chart-renderer"
 main = "src/worker.js"
 compatibility_date = "2026-05-28"
+account_id = "5c2215b52b350942c98e85478ede42aa"
 
 [vars]
 MAX_BODY_BYTES = "1000000"

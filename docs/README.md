@@ -7,6 +7,7 @@ The current service does not generate PNG on the server. It validates chart payl
 ## 文档索引
 
 - Agent 调用 API 文档：`docs/api.md`
+- Cloudflare API Shield OpenAPI schema：`docs/openapi.yaml`
 - Agent 接手说明：`docs/agent-handoff.md`
 - CHART-002 Cloudflare Worker Serverless 改造计划：`docs/serverless-implementation-plan.md`
 - CHART-001 历史 Node SSR 计划：`docs/implementation-plan.md`
@@ -21,6 +22,8 @@ The current service does not generate PNG on the server. It validates chart payl
 - `src/worker.js` 提供 Cloudflare Worker 入口。
 - `GET /health` 返回 Worker runtime metadata。
 - `GET /viewer` 由 Worker 直接返回浏览器 viewer。
+- `GET /api` 和 `GET /docs/api` 由 Worker 直接返回 API 文档页面。
+- `GET /logo.svg`、`GET /favicon.svg`、`GET /favicon.ico` 由 Worker 直接返回内置品牌资源。
 - `POST /render` 支持 `response_format=config`。
 - 简单图表支持 Worker SVG：`line`、`bar`、`column`、`pie`、`summary`。
 - 复杂图表支持 HTML shell，由浏览器端 `@antv/gpt-vis@0.6.1` 渲染。
