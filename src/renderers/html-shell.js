@@ -1,7 +1,7 @@
 const GPT_VIS_VERSION = "0.6.1";
 const REACT_VERSION = "18";
 const HTML_TO_IMAGE_VERSION = "1.11.11";
-const CACHE_BUSTER = "viewer-v16";
+const CACHE_BUSTER = "viewer-v17";
 
 export function renderChartHtml(chart, hash) {
   const title = chart.title || `${chart.type} chart`;
@@ -70,41 +70,109 @@ export function renderViewerHtml() {
     body: `
       <main class="shell shell-viewer">
         <header class="topbar">
-          <div>
-            <p class="eyebrow">chart-renderer</p>
-            <h1>Chart Viewer</h1>
+          <div class="brand">
+            <img class="brand-logo" src="/logo.svg" alt="chart-renderer">
+            <p>artifact workbench</p>
           </div>
-          <div class="actions">
-            <button id="render-config" type="button">Config</button>
-            <button id="render-svg" type="button">SVG</button>
-            <button id="render-html" type="button">HTML</button>
+          <div id="status" class="system-state">Ready</div>
+          <div class="actions download-actions">
             <button id="download-json" type="button">JSON</button>
             <button id="download-svg" type="button">SVG</button>
             <button id="download-png" type="button">PNG</button>
           </div>
         </header>
         <section class="workspace">
-          <aside class="editor-panel">
-            <div class="control-row">
-              <label for="theme-select">Theme</label>
-              <select id="theme-select">
-                <option value="default">Default</option>
-                <option value="dark">Dark</option>
-                <option value="academy">Academy</option>
-              </select>
-              <label for="width-input">W</label>
-              <input id="width-input" type="number" min="100" max="4096" step="10" value="900">
-              <label for="height-input">H</label>
-              <input id="height-input" type="number" min="100" max="4096" step="10" value="520">
-              <span></span>
-              <button id="apply-controls" type="button">Apply</button>
-            </div>
-            <textarea id="payload-input" spellcheck="false"></textarea>
-            <pre id="result-output" class="result-output"></pre>
+          <aside class="editor-panel inspector">
+            <section class="panel">
+              <div class="panel-head">
+                <h2 class="panel-title">Request</h2>
+                <span class="panel-hint">response_format</span>
+              </div>
+              <div class="mode-switch" aria-label="Response format">
+                <button id="render-config" class="active" type="button">CONFIG</button>
+                <button id="render-svg" type="button">SVG</button>
+                <button id="render-html" type="button">HTML</button>
+              </div>
+            </section>
+            <section class="panel param-panel">
+              <div class="panel-head">
+                <h2 class="panel-title">Chart parameters</h2>
+                <span class="panel-hint">payload sync</span>
+              </div>
+              <div class="control-row param-grid">
+                <label for="theme-select">Theme</label>
+                <select id="theme-select">
+                  <option value="default">Default</option>
+                  <option value="dark">Dark</option>
+                  <option value="academy">Academy</option>
+                </select>
+                <label for="width-input">Size</label>
+                <div class="size-grid">
+                  <input id="width-input" type="number" min="100" max="4096" step="10" value="900" aria-label="Width">
+                  <input id="height-input" type="number" min="100" max="4096" step="10" value="520" aria-label="Height">
+                </div>
+              </div>
+              <div class="apply-row">
+                <span></span>
+                <button id="apply-controls" class="apply" type="button">APPLY CHANGES</button>
+              </div>
+            </section>
+            <section class="panel payload">
+              <div class="panel-head">
+                <h2 class="panel-title">Payload</h2>
+                <span class="panel-hint">json</span>
+              </div>
+              <div class="editor">
+                <div class="line-numbers" aria-hidden="true">1<br>2<br>3<br>4<br>5<br>6<br>7<br>8<br>9<br>10<br>11<br>12<br>13<br>14<br>15<br>16<br>17<br>18</div>
+                <textarea id="payload-input" spellcheck="false"></textarea>
+              </div>
+            </section>
+            <section class="panel response-panel">
+              <div class="panel-head">
+                <h2 class="panel-title">Response</h2>
+                <span class="panel-hint">latest</span>
+              </div>
+              <div class="response">
+                <div class="metric">
+                  <div class="metric-label">status</div>
+                  <div id="metric-status" class="metric-value ok">ready</div>
+                </div>
+                <div class="metric">
+                  <div class="metric-label">format</div>
+                  <div id="metric-format" class="metric-value">config</div>
+                </div>
+                <div class="metric">
+                  <div class="metric-label">size</div>
+                  <div id="metric-size" class="metric-value">900 x 520</div>
+                </div>
+                <div class="metric">
+                  <div class="metric-label">hash</div>
+                  <div id="metric-hash" class="metric-value">pending</div>
+                </div>
+              </div>
+              <pre id="result-output" class="result-output"></pre>
+            </section>
           </aside>
-          <section class="preview-wrap">
-            <div id="status" class="status">Ready</div>
-            <div id="chart-root" class="chart-root" aria-live="polite"></div>
+          <section class="preview-wrap preview">
+            <header class="preview-head">
+              <div class="artifact-title">
+                <h2 id="artifact-title">Risk profile</h2>
+                <p>Measured chart artifact preview</p>
+              </div>
+              <div class="artifact-tags">
+                <span id="tag-size" class="tag">900 x 520</span>
+                <span id="tag-format" class="tag">CONFIG</span>
+                <span id="tag-theme" class="tag">default</span>
+              </div>
+            </header>
+            <div class="stage">
+              <div class="corner" aria-hidden="true"></div>
+              <div class="ruler-x" aria-hidden="true"><span>0</span><span>240</span><span>480</span><span>720</span><span>960</span></div>
+              <div class="ruler-y" aria-hidden="true"><span>0</span><span>160</span><span>320</span><span>520</span></div>
+              <div class="viewport">
+                <div id="chart-root" class="chart-root" aria-live="polite"></div>
+              </div>
+            </div>
           </section>
         </section>
       </main>
@@ -119,6 +187,8 @@ function htmlDocument({ title, state, body }) {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>${escapeHtml(title)}</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="mask-icon" href="/favicon.svg" color="#111827">
   <style>${viewerCss()}</style>
 </head>
 <body>
@@ -136,38 +206,105 @@ function htmlDocument({ title, state, body }) {
 
 function viewerCss() {
   return `
+    :root {
+      --ink: #111827;
+      --slate: #344054;
+      --muted: #667085;
+      --paper: #f7f9fc;
+      --panel: #ffffff;
+      --blueprint: #e8f1ff;
+      --blueprint-line: rgba(23, 92, 211, 0.12);
+      --rule: #c9d6e6;
+      --rule-dark: #9fb0c4;
+      --signal: #0f9f6e;
+      --accent: #175cd3;
+      --accent-dark: #123c8c;
+      --amber: #b54708;
+      --mono: "IBM Plex Mono", "SFMono-Regular", Consolas, ui-monospace, monospace;
+      --sans: "Avenir Next", Aptos, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+    }
     * { box-sizing: border-box; }
     body {
       margin: 0;
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: #f5f7fb;
-      color: #111827;
+      min-height: 100vh;
+      font-family: var(--sans);
+      background:
+        linear-gradient(90deg, rgba(17, 24, 39, 0.035) 1px, transparent 1px) 0 0 / 32px 32px,
+        linear-gradient(rgba(17, 24, 39, 0.035) 1px, transparent 1px) 0 0 / 32px 32px,
+        var(--paper);
+      color: var(--ink);
+    }
+    button,
+    input,
+    select,
+    textarea {
+      font: inherit;
     }
     .shell {
       min-height: 100vh;
-      display: flex;
-      flex-direction: column;
+      display: grid;
+      grid-template-rows: 62px minmax(0, 1fr);
     }
     .topbar {
+      display: grid;
+      grid-template-columns: minmax(240px, 1fr) auto minmax(220px, 1fr);
+      align-items: center;
+      gap: 16px;
+      padding: 0 18px;
+      border-bottom: 1px solid var(--rule);
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+    }
+    .brand {
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      gap: 24px;
-      padding: 18px 24px;
-      border-bottom: 1px solid #d9e1ec;
-      background: #ffffff;
+      gap: 12px;
+      min-width: 0;
+    }
+    .brand-logo {
+      width: 196px;
+      height: auto;
+      display: block;
+      flex: 0 0 auto;
+    }
+    .brand-stamp {
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--ink);
+      border-radius: 6px;
+      background: linear-gradient(135deg, var(--ink) 0 49%, #263244 50% 100%);
+      color: #ffffff;
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 900;
+    }
+    h1 {
+      margin: 0;
+      font-size: 18px;
+      line-height: 1.1;
+      font-weight: 860;
+    }
+    .brand p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
     }
     .eyebrow {
       margin: 0 0 2px;
-      color: #667085;
+      color: var(--muted);
       font-size: 12px;
       font-weight: 700;
       text-transform: uppercase;
     }
-    h1 {
-      margin: 0;
-      font-size: 22px;
-      line-height: 1.2;
+    .status {
+      min-height: 24px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
     }
     .actions {
       display: flex;
@@ -175,108 +312,358 @@ function viewerCss() {
       gap: 8px;
       justify-content: flex-end;
     }
+    .download-actions {
+      justify-self: end;
+    }
     button {
-      min-width: 70px;
       height: 34px;
-      border: 1px solid #c9d4e5;
+      min-width: 58px;
+      padding: 0 12px;
+      border: 1px solid var(--rule);
       border-radius: 6px;
-      background: #ffffff;
-      color: #111827;
-      font-weight: 700;
+      background: var(--panel);
+      color: var(--ink);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.01em;
       cursor: pointer;
     }
-    button:hover { background: #f1f5f9; }
+    button:hover { background: #f4f8fd; }
+    .system-state {
+      justify-self: center;
+      height: 30px;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 12px;
+      border: 1px solid var(--rule);
+      border-radius: 999px;
+      background: #fbfdff;
+      color: var(--slate);
+      font-size: 12px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+    .system-state::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--signal);
+      box-shadow: 0 0 0 4px rgba(15, 159, 110, 0.12);
+    }
     .workspace {
-      flex: 1;
-      width: 100%;
-      display: grid;
-      grid-template-columns: minmax(280px, 400px) minmax(0, 1fr);
       min-height: 0;
+      display: grid;
+      grid-template-columns: 432px minmax(0, 1fr);
       overflow: hidden;
     }
     .editor-panel {
-      display: grid;
-      grid-template-rows: auto minmax(260px, 1fr) 180px;
-      gap: 12px;
-      padding: 16px;
-      border-right: 1px solid #d9e1ec;
-      background: #ffffff;
       min-height: 0;
       min-width: 0;
+      display: grid;
+      grid-template-rows: auto auto minmax(260px, 1fr) auto;
+      gap: 14px;
+      padding: 16px;
+      border-right: 1px solid var(--rule);
+      background: rgba(255, 255, 255, 0.92);
       overflow: hidden;
     }
-    .control-row {
+    .panel {
+      min-width: 0;
+    }
+    .panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+    .panel-title {
+      margin: 0;
+      color: var(--slate);
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .panel-hint {
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .mode-switch {
       display: grid;
-      grid-template-columns: 64px minmax(0, 1fr);
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0;
+      border: 1px solid var(--rule);
+      border-radius: 8px;
+      overflow: hidden;
+      background: #f3f7fc;
+    }
+    .mode-switch button {
+      border: 0;
+      border-right: 1px solid var(--rule);
+      border-radius: 0;
+      background: transparent;
+      color: var(--slate);
+    }
+    .mode-switch button:last-child { border-right: 0; }
+    .mode-switch button.active {
+      background: var(--accent);
+      color: #ffffff;
+    }
+    .param-panel {
+      padding: 12px;
+      border: 1px solid var(--rule);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+    .param-grid {
+      display: grid;
+      grid-template-columns: 78px minmax(0, 1fr);
       gap: 10px;
       align-items: center;
     }
-    .control-row label {
-      color: #667085;
-      font-size: 13px;
-      font-weight: 700;
+    .param-grid label {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 850;
     }
     select,
     input[type="number"] {
+      width: 100%;
       height: 34px;
-      border: 1px solid #c9d4e5;
-      border-radius: 6px;
-      background: #ffffff;
-      color: #111827;
-      font-weight: 700;
-    }
-    select { min-width: 128px; }
-    input[type="number"] {
-      width: 100%;
-      padding: 0 8px;
-    }
-    #apply-controls {
-      width: 100%;
-      min-width: 0;
-    }
-    textarea,
-    .result-output {
-      width: 100%;
-      margin: 0;
-      padding: 12px;
-      border: 1px solid #c9d4e5;
+      padding: 0 10px;
+      border: 1px solid var(--rule);
       border-radius: 6px;
       background: #fbfdff;
-      font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      color: #111827;
+      color: var(--ink);
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .size-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 8px;
+    }
+    .apply-row {
+      display: grid;
+      grid-template-columns: 78px minmax(0, 1fr);
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .apply {
+      width: 100%;
+      min-width: 0;
+      border-color: var(--accent);
+      background: var(--accent);
+      color: #ffffff;
+    }
+    .payload {
+      min-height: 0;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+    }
+    .editor {
+      min-height: 0;
+      display: grid;
+      grid-template-columns: 46px minmax(0, 1fr);
+      border: 1px solid var(--rule);
+      border-radius: 8px;
+      overflow: hidden;
+      background: #0f172a;
+    }
+    .line-numbers {
+      padding: 12px 9px;
+      border-right: 1px solid rgba(255, 255, 255, 0.08);
+      background: #111c31;
+      color: #718096;
+      font: 12px/1.55 var(--mono);
+      text-align: right;
+      user-select: none;
+    }
+    textarea {
+      width: 100%;
+      height: 100%;
+      min-height: 360px;
+      padding: 12px 14px;
+      border: 0;
+      outline: 0;
       resize: none;
+      background: transparent;
+      color: #dbeafe;
+      font: 12px/1.55 var(--mono);
       overflow: auto;
+    }
+    .response-panel {
+      min-height: 0;
+    }
+    .response {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      border: 1px solid var(--rule);
+      border-radius: 8px;
+      overflow: hidden;
+      background: var(--panel);
+    }
+    .metric {
+      min-width: 0;
+      padding: 10px 12px;
+      border-right: 1px solid var(--rule);
+      border-bottom: 1px solid var(--rule);
+    }
+    .metric:nth-child(2n) { border-right: 0; }
+    .metric:nth-last-child(-n + 2) { border-bottom: 0; }
+    .metric-label {
+      margin-bottom: 4px;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 900;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .metric-value {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .metric-value.ok { color: var(--signal); }
+    .result-output {
+      width: 100%;
+      max-height: 120px;
+      margin: 10px 0 0;
+      padding: 10px;
+      border: 1px solid var(--rule);
+      border-radius: 8px;
+      background: #fbfdff;
+      color: var(--slate);
+      font: 11px/1.45 var(--mono);
+      overflow: auto;
+      white-space: pre-wrap;
     }
     .preview-wrap {
-      flex: 1;
-      min-height: 0;
       min-width: 0;
+      min-height: 0;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      gap: 14px;
       padding: 16px;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
       overflow: hidden;
     }
-    .status {
-      min-height: 24px;
-      color: #667085;
-      font-size: 13px;
-      font-weight: 600;
+    .preview-head {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 16px;
     }
-    .chart-root {
-      flex: 1;
-      width: 100%;
+    .artifact-title h2 {
+      margin: 0;
+      font-size: 19px;
+      line-height: 1.15;
+      font-weight: 860;
+    }
+    .artifact-title p {
+      margin: 5px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .artifact-tags {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .tag {
+      min-height: 28px;
+      display: inline-flex;
+      align-items: center;
+      padding: 0 10px;
+      border: 1px solid var(--rule);
+      border-radius: 6px;
+      background: var(--panel);
+      color: var(--slate);
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 800;
+    }
+    .stage {
       min-width: 0;
       min-height: 0;
-      background: #ffffff;
-      border: 1px solid #d9e1ec;
+      display: grid;
+      grid-template-columns: 42px minmax(0, 1fr);
+      grid-template-rows: 34px minmax(0, 1fr);
+      border: 1px solid var(--rule);
       border-radius: 8px;
-      padding: 18px;
+      background: var(--panel);
+      overflow: hidden;
+      box-shadow: 0 1px 2px rgba(17, 24, 39, 0.08);
+    }
+    .corner {
+      grid-column: 1;
+      grid-row: 1;
+      border-right: 1px solid var(--rule);
+      border-bottom: 1px solid var(--rule);
+      background: #f4f8fd;
+    }
+    .ruler-x,
+    .ruler-y {
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 800;
+      background: #f4f8fd;
+    }
+    .ruler-x {
+      grid-column: 2;
+      grid-row: 1;
+      display: flex;
+      align-items: center;
+      gap: 96px;
+      padding: 0 18px;
+      border-bottom: 1px solid var(--rule);
+      overflow: hidden;
+    }
+    .ruler-y {
+      grid-column: 1;
+      grid-row: 2;
+      display: flex;
+      align-items: center;
+      flex-direction: column;
+      gap: 64px;
+      padding-top: 18px;
+      border-right: 1px solid var(--rule);
+    }
+    .viewport {
+      grid-column: 2;
+      grid-row: 2;
+      min-width: 0;
+      min-height: 0;
       overflow: auto;
+      padding: 22px;
+      background:
+        linear-gradient(90deg, var(--blueprint-line) 1px, transparent 1px) 0 0 / 24px 24px,
+        linear-gradient(var(--blueprint-line) 1px, transparent 1px) 0 0 / 24px 24px,
+        var(--blueprint);
+    }
+    .chart-root {
+      width: max-content;
+      min-width: 320px;
+      min-height: 240px;
+      background: #ffffff;
+      border: 1px solid #b9c9dc;
+      box-shadow: 0 18px 40px rgba(23, 92, 211, 0.12);
+      overflow: visible;
     }
     .chart-root > pre {
-      width: 100%;
-      min-width: 0;
+      width: max-content;
+      min-width: 320px;
       margin: 0;
       font-family: inherit;
       white-space: normal;
@@ -320,19 +707,67 @@ function viewerCss() {
       overflow: visible !important;
     }
     .chart-root iframe {
-      width: 100%;
-      height: 100%;
-      min-height: 0;
+      width: var(--chart-host-width, 900px);
+      height: var(--chart-host-height, 520px);
+      min-height: var(--chart-host-height, 520px);
       border: 0;
     }
+    .fallback-card {
+      width: var(--chart-host-width, 900px);
+      min-height: var(--chart-host-height, 520px);
+      padding: 32px;
+      background: #ffffff;
+    }
+    .fallback-card h2 {
+      margin: 0 0 18px;
+      font-size: 24px;
+    }
+    .fallback-card pre {
+      margin: 0;
+      font: 14px/1.5 var(--mono);
+      white-space: pre-wrap;
+    }
     .shell-single .chart-root {
+      width: 100%;
       min-height: 700px;
+      padding: 18px;
+      overflow: auto;
+    }
+    .shell-single .preview-wrap {
+      display: flex;
+      flex-direction: column;
+    }
+    .shell-single .chart-root > pre {
+      width: 100%;
     }
     @media (max-width: 860px) {
-      .topbar { align-items: flex-start; flex-direction: column; }
-      .actions { justify-content: flex-start; }
-      .workspace { grid-template-columns: 1fr; }
-      .editor-panel { border-right: 0; border-bottom: 1px solid #d9e1ec; }
+      .shell {
+        grid-template-rows: auto minmax(0, 1fr);
+      }
+      .topbar {
+        grid-template-columns: 1fr;
+        align-items: start;
+        padding: 14px 16px;
+      }
+      .system-state,
+      .download-actions {
+        justify-self: start;
+      }
+      .workspace {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto minmax(520px, 1fr);
+        overflow: auto;
+      }
+      .editor-panel {
+        border-right: 0;
+        border-bottom: 1px solid var(--rule);
+      }
+      .preview-head {
+        grid-template-columns: 1fr;
+      }
+      .artifact-tags {
+        justify-content: flex-start;
+      }
     }
   `;
 }
@@ -350,6 +785,14 @@ function viewerJs() {
     const applyControls = document.getElementById("apply-controls");
     const controlRow = document.querySelector(".control-row");
     const resultOutput = document.getElementById("result-output");
+    const metricStatus = document.getElementById("metric-status");
+    const metricFormat = document.getElementById("metric-format");
+    const metricSize = document.getElementById("metric-size");
+    const metricHash = document.getElementById("metric-hash");
+    const tagSize = document.getElementById("tag-size");
+    const tagFormat = document.getElementById("tag-format");
+    const tagTheme = document.getElementById("tag-theme");
+    const artifactTitle = document.getElementById("artifact-title");
     let currentConfig = state.chart || null;
     let currentPayload = state.payload || state.chart || null;
     let currentSvg = "";
@@ -366,6 +809,25 @@ function viewerJs() {
 
     function setStatus(message) {
       statusEl.textContent = message;
+      if (metricStatus) metricStatus.textContent = message.toLowerCase().replace(/\\.+$/, "");
+    }
+
+    function updateViewerMeta(chart = currentConfig || currentPayload) {
+      if (!chart) return;
+      const { width, height } = chartSize(chart);
+      const format = String(currentFormat || chart.response_format || "config").toUpperCase();
+      const theme = chartTheme(chart);
+      const sizeLabel = width + " x " + height;
+      if (metricFormat) metricFormat.textContent = String(currentFormat || "config");
+      if (metricSize) metricSize.textContent = sizeLabel;
+      if (metricHash) metricHash.textContent = currentHash ? currentHash.replace(/^sha256:/, "sha256:").slice(0, 18) + (currentHash.length > 18 ? "..." : "") : "pending";
+      if (tagSize) tagSize.textContent = sizeLabel;
+      if (tagFormat) tagFormat.textContent = format;
+      if (tagTheme) tagTheme.textContent = theme;
+      if (artifactTitle) artifactTitle.textContent = chart.title || (chart.type ? chart.type + " chart" : "Chart preview");
+      for (const button of document.querySelectorAll(".mode-switch button")) {
+        button.classList.toggle("active", button.textContent.trim().toLowerCase() === String(currentFormat || "config").toLowerCase());
+      }
     }
 
     function toMarkdown(chart) {
@@ -378,6 +840,7 @@ function viewerJs() {
       currentHtml = "";
       pendingGptVisChart = chart;
       prepareChartFrame(chart);
+      updateViewerMeta(chart);
       if (currentReactRoot) {
         currentReactRoot.unmount();
         currentReactRoot = null;
@@ -535,7 +998,7 @@ function viewerJs() {
         return;
       }
       chartRoot.innerHTML =
-        '<div class="fallback-card"><h2>' + escapeHtml(chart.title || chart.type + ' chart') + '</h2><pre>' +
+        '<div class="fallback-card" style="width:' + chartSize(chart).width + 'px;min-height:' + chartSize(chart).height + 'px"><h2>' + escapeHtml(chart.title || chart.type + ' chart') + '</h2><pre>' +
         escapeHtml(JSON.stringify(chart, null, 2)) +
         '</pre></div>';
     }
@@ -706,6 +1169,7 @@ function viewerJs() {
       payload.response_format = format;
       currentFormat = format;
       currentPayload = payload;
+      updateViewerMeta(payload);
       const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -716,6 +1180,7 @@ function viewerJs() {
       if (contentType.includes("image/svg+xml")) {
         const svg = await response.text();
         renderSvg(svg);
+        updateViewerMeta(currentPayload || currentConfig);
         if (resultOutput) resultOutput.textContent = svg.slice(0, 2000);
         return;
       }
@@ -728,9 +1193,11 @@ function viewerJs() {
         currentHtml = html;
         currentSvg = "";
         prepareChartFrame(currentPayload || currentConfig);
-        chartRoot.innerHTML = '<iframe title="Rendered HTML chart" srcdoc="' + escapeAttribute(html) + '"></iframe>';
+        const { width, height } = chartSize(currentPayload || currentConfig);
+        chartRoot.innerHTML = '<iframe title="Rendered HTML chart" style="width:' + width + 'px;height:' + height + 'px;min-height:' + height + 'px" srcdoc="' + escapeAttribute(html) + '"></iframe>';
         if (resultOutput) resultOutput.textContent = html.slice(0, 2000);
         setStatus("Rendered HTML shell");
+        updateViewerMeta(currentPayload || currentConfig);
         return;
       }
       const data = await response.json();
@@ -743,6 +1210,7 @@ function viewerJs() {
         syncThemeControl(data.chart);
         syncSizeControls(data.chart);
         renderGptVis(data.chart);
+        updateViewerMeta(data.chart);
         if (resultOutput) resultOutput.textContent = JSON.stringify(data, null, 2);
       }
     }
@@ -828,6 +1296,7 @@ function viewerJs() {
     function downloadJson() {
       const content = JSON.stringify(currentConfig || currentPayload, null, 2);
       downloadBlob((currentHash || "chart") + ".json", "application/json", content);
+      setStatus("Downloaded JSON");
     }
 
     async function downloadPng() {
@@ -975,6 +1444,7 @@ function viewerJs() {
       payloadInput.value = JSON.stringify(state.payload, null, 2);
       syncThemeControl(state.payload);
       syncSizeControls(state.payload);
+      updateViewerMeta(state.payload);
       applyControls?.addEventListener("click", () => safeRun(applyControlSelection));
       widthInput?.addEventListener("keydown", handleControlKeydown);
       heightInput?.addEventListener("keydown", handleControlKeydown);

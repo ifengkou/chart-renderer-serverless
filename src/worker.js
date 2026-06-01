@@ -1,9 +1,10 @@
+import { FAVICON_SVG, LOGO_SVG } from "./assets.js";
 import { renderChartHtml, renderViewerHtml } from "./renderers/html-shell.js";
 import { canRenderSvg, renderSvg, SIMPLE_SVG_TYPES } from "./renderers/svg.js";
 
 const SERVICE_NAME = "chart-renderer";
 const SERVICE_VERSION = "0.2.0";
-const CACHE_NAMESPACE = "worker-v16";
+const CACHE_NAMESPACE = "worker-v17";
 const DEFAULT_WIDTH = 900;
 const DEFAULT_HEIGHT = 520;
 const MIN_SIZE = 100;
@@ -43,6 +44,14 @@ export default {
             "Content-Type": "text/html; charset=utf-8"
           }
         });
+      }
+
+      if (request.method === "GET" && (url.pathname === "/favicon.svg" || url.pathname === "/favicon.ico")) {
+        return svgAssetResponse(FAVICON_SVG);
+      }
+
+      if (request.method === "GET" && url.pathname === "/logo.svg") {
+        return svgAssetResponse(LOGO_SVG);
       }
 
       if (request.method !== "POST" || url.pathname !== "/render") {
@@ -329,6 +338,16 @@ function jsonResponse(status, payload, headers = {}) {
     headers: {
       "Content-Type": "application/json; charset=utf-8",
       ...headers
+    }
+  });
+}
+
+function svgAssetResponse(svg) {
+  return new Response(svg, {
+    status: 200,
+    headers: {
+      "Content-Type": "image/svg+xml; charset=utf-8",
+      "Cache-Control": "public, max-age=31536000, immutable"
     }
   });
 }

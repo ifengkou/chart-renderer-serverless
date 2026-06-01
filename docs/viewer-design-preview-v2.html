@@ -1,0 +1,748 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chart Viewer Design Preview V2</title>
+  <style>
+    :root {
+      --ink: #111827;
+      --slate: #344054;
+      --muted: #667085;
+      --paper: #f7f9fc;
+      --panel: #ffffff;
+      --blueprint: #e8f1ff;
+      --blueprint-line: rgba(23, 92, 211, 0.12);
+      --rule: #c9d6e6;
+      --rule-dark: #9fb0c4;
+      --signal: #0f9f6e;
+      --accent: #175cd3;
+      --accent-dark: #123c8c;
+      --amber: #b54708;
+      --mono: "IBM Plex Mono", "SFMono-Regular", Consolas, ui-monospace, monospace;
+      --sans: "Avenir Next", Aptos, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        linear-gradient(90deg, rgba(17, 24, 39, 0.035) 1px, transparent 1px) 0 0 / 32px 32px,
+        linear-gradient(rgba(17, 24, 39, 0.035) 1px, transparent 1px) 0 0 / 32px 32px,
+        var(--paper);
+      color: var(--ink);
+      font-family: var(--sans);
+    }
+
+    button,
+    input,
+    select,
+    textarea {
+      font: inherit;
+    }
+
+    button {
+      height: 34px;
+      border: 1px solid var(--rule);
+      border-radius: 6px;
+      background: var(--panel);
+      color: var(--ink);
+      padding: 0 12px;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.01em;
+    }
+
+    input,
+    select {
+      width: 100%;
+      height: 34px;
+      border: 1px solid var(--rule);
+      border-radius: 6px;
+      background: #fbfdff;
+      color: var(--ink);
+      padding: 0 10px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .app {
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: 62px minmax(0, 1fr);
+    }
+
+    .topbar {
+      display: grid;
+      grid-template-columns: minmax(240px, 1fr) auto minmax(220px, 1fr);
+      align-items: center;
+      gap: 16px;
+      padding: 0 18px;
+      border-bottom: 1px solid var(--rule);
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .brand-stamp {
+      width: 34px;
+      height: 34px;
+      border: 1px solid var(--ink);
+      border-radius: 6px;
+      display: grid;
+      place-items: center;
+      background:
+        linear-gradient(135deg, var(--ink) 0 49%, #263244 50% 100%);
+      color: white;
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 18px;
+      line-height: 1.1;
+      font-weight: 860;
+    }
+
+    .brand p {
+      margin: 3px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .system-state {
+      justify-self: center;
+      height: 30px;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 12px;
+      border: 1px solid var(--rule);
+      border-radius: 999px;
+      background: #fbfdff;
+      color: var(--slate);
+      font-size: 12px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .system-state::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--signal);
+      box-shadow: 0 0 0 4px rgba(15, 159, 110, 0.12);
+    }
+
+    .download-actions {
+      justify-self: end;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .download-actions button {
+      min-width: 58px;
+    }
+
+    .workspace {
+      min-height: 0;
+      display: grid;
+      grid-template-columns: 432px minmax(0, 1fr);
+      overflow: hidden;
+    }
+
+    .inspector {
+      min-height: 0;
+      display: grid;
+      grid-template-rows: auto auto minmax(260px, 1fr) auto;
+      gap: 14px;
+      padding: 16px;
+      border-right: 1px solid var(--rule);
+      background: rgba(255, 255, 255, 0.92);
+      overflow: hidden;
+    }
+
+    .panel {
+      min-width: 0;
+    }
+
+    .panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+
+    .panel-title {
+      margin: 0;
+      color: var(--slate);
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .panel-hint {
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .mode-switch {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0;
+      border: 1px solid var(--rule);
+      border-radius: 8px;
+      overflow: hidden;
+      background: #f3f7fc;
+    }
+
+    .mode-switch button {
+      border: 0;
+      border-right: 1px solid var(--rule);
+      border-radius: 0;
+      background: transparent;
+      color: var(--slate);
+    }
+
+    .mode-switch button:last-child {
+      border-right: 0;
+    }
+
+    .mode-switch button.active {
+      background: var(--accent);
+      color: white;
+    }
+
+    .param-panel {
+      border: 1px solid var(--rule);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 12px;
+    }
+
+    .param-grid {
+      display: grid;
+      grid-template-columns: 78px minmax(0, 1fr);
+      gap: 10px;
+      align-items: center;
+    }
+
+    .param-grid label {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 850;
+    }
+
+    .size-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 8px;
+    }
+
+    .apply-row {
+      display: grid;
+      grid-template-columns: 78px minmax(0, 1fr);
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .apply {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: white;
+    }
+
+    .payload {
+      min-height: 0;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+    }
+
+    .editor {
+      min-height: 0;
+      display: grid;
+      grid-template-columns: 46px minmax(0, 1fr);
+      border: 1px solid var(--rule);
+      border-radius: 8px;
+      overflow: hidden;
+      background: #0f172a;
+    }
+
+    .line-numbers {
+      padding: 12px 9px;
+      border-right: 1px solid rgba(255, 255, 255, 0.08);
+      background: #111c31;
+      color: #718096;
+      font: 12px/1.55 var(--mono);
+      text-align: right;
+      user-select: none;
+    }
+
+    textarea {
+      width: 100%;
+      height: 100%;
+      min-height: 360px;
+      padding: 12px 14px;
+      border: 0;
+      outline: 0;
+      resize: none;
+      background: transparent;
+      color: #dbeafe;
+      font: 12px/1.55 var(--mono);
+    }
+
+    .response {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      border: 1px solid var(--rule);
+      border-radius: 8px;
+      overflow: hidden;
+      background: var(--panel);
+    }
+
+    .metric {
+      min-width: 0;
+      padding: 10px 12px;
+      border-right: 1px solid var(--rule);
+      border-bottom: 1px solid var(--rule);
+    }
+
+    .metric:nth-child(2n) {
+      border-right: 0;
+    }
+
+    .metric:nth-last-child(-n + 2) {
+      border-bottom: 0;
+    }
+
+    .metric-label {
+      margin-bottom: 4px;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 900;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .metric-value {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .metric-value.ok {
+      color: var(--signal);
+    }
+
+    .preview {
+      min-width: 0;
+      min-height: 0;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      gap: 14px;
+      padding: 16px;
+      overflow: hidden;
+    }
+
+    .preview-head {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .artifact-title h2 {
+      margin: 0;
+      font-size: 19px;
+      line-height: 1.15;
+      font-weight: 860;
+    }
+
+    .artifact-title p {
+      margin: 5px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .artifact-tags {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .tag {
+      min-height: 28px;
+      display: inline-flex;
+      align-items: center;
+      padding: 0 10px;
+      border: 1px solid var(--rule);
+      border-radius: 6px;
+      background: var(--panel);
+      color: var(--slate);
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .stage {
+      min-width: 0;
+      min-height: 0;
+      display: grid;
+      grid-template-columns: 42px minmax(0, 1fr);
+      grid-template-rows: 34px minmax(0, 1fr);
+      border: 1px solid var(--rule);
+      border-radius: 8px;
+      background: var(--panel);
+      overflow: hidden;
+      box-shadow: 0 1px 2px rgba(17, 24, 39, 0.08);
+    }
+
+    .corner {
+      grid-column: 1;
+      grid-row: 1;
+      border-right: 1px solid var(--rule);
+      border-bottom: 1px solid var(--rule);
+      background: #f4f8fd;
+    }
+
+    .ruler-x,
+    .ruler-y {
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 800;
+      background: #f4f8fd;
+    }
+
+    .ruler-x {
+      grid-column: 2;
+      grid-row: 1;
+      display: flex;
+      align-items: center;
+      gap: 96px;
+      padding: 0 18px;
+      border-bottom: 1px solid var(--rule);
+      overflow: hidden;
+    }
+
+    .ruler-y {
+      grid-column: 1;
+      grid-row: 2;
+      display: flex;
+      align-items: center;
+      flex-direction: column;
+      gap: 64px;
+      padding-top: 18px;
+      border-right: 1px solid var(--rule);
+    }
+
+    .viewport {
+      grid-column: 2;
+      grid-row: 2;
+      min-width: 0;
+      min-height: 0;
+      overflow: auto;
+      background:
+        linear-gradient(90deg, var(--blueprint-line) 1px, transparent 1px) 0 0 / 24px 24px,
+        linear-gradient(var(--blueprint-line) 1px, transparent 1px) 0 0 / 24px 24px,
+        var(--blueprint);
+      padding: 22px;
+    }
+
+    .artifact {
+      width: 900px;
+      height: 520px;
+      position: relative;
+      overflow: hidden;
+      border: 1px solid #b9c9dc;
+      background: #ffffff;
+      box-shadow: 0 18px 40px rgba(23, 92, 211, 0.12);
+    }
+
+    .chart-title {
+      position: absolute;
+      top: 30px;
+      left: 34px;
+    }
+
+    .chart-title h3 {
+      margin: 0;
+      font-size: 24px;
+      font-weight: 860;
+      line-height: 1.15;
+    }
+
+    .chart-title p {
+      margin: 6px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .legend {
+      position: absolute;
+      top: 38px;
+      right: 42px;
+      display: flex;
+      gap: 18px;
+      color: var(--slate);
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .legend span::before {
+      content: "";
+      width: 9px;
+      height: 9px;
+      background: var(--accent);
+    }
+
+    .legend span:last-child::before {
+      background: #13a89e;
+    }
+
+    .plot {
+      position: absolute;
+      left: 78px;
+      right: 46px;
+      top: 138px;
+      bottom: 78px;
+      border-left: 1px solid #d6deea;
+      border-bottom: 1px solid #d6deea;
+    }
+
+    .plot::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(to bottom, transparent 0, transparent 60px, #edf2f7 61px);
+    }
+
+    .chart-svg {
+      position: absolute;
+      inset: 0;
+      overflow: visible;
+    }
+
+    @media (max-width: 900px) {
+      .app {
+        grid-template-rows: auto minmax(0, 1fr);
+      }
+
+      .topbar {
+        grid-template-columns: 1fr;
+        align-items: start;
+        padding: 14px 16px;
+      }
+
+      .system-state,
+      .download-actions {
+        justify-self: start;
+      }
+
+      .workspace {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto minmax(520px, 1fr);
+        overflow: auto;
+      }
+
+      .inspector {
+        border-right: 0;
+        border-bottom: 1px solid var(--rule);
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-stamp">CR</div>
+        <div>
+          <h1>chart-renderer</h1>
+          <p>artifact workbench</p>
+        </div>
+      </div>
+      <div class="system-state">rendered · worker</div>
+      <div class="download-actions">
+        <button>JSON</button>
+        <button>SVG</button>
+        <button>PNG</button>
+      </div>
+    </header>
+
+    <section class="workspace">
+      <aside class="inspector">
+        <section class="panel">
+          <div class="panel-head">
+            <h2 class="panel-title">Request</h2>
+            <span class="panel-hint">response_format</span>
+          </div>
+          <div class="mode-switch" aria-label="Response format">
+            <button class="active">CONFIG</button>
+            <button>SVG</button>
+            <button>HTML</button>
+          </div>
+        </section>
+
+        <section class="panel param-panel">
+          <div class="panel-head">
+            <h2 class="panel-title">Chart parameters</h2>
+            <span class="panel-hint">payload sync</span>
+          </div>
+          <div class="param-grid">
+            <label for="theme">Theme</label>
+            <select id="theme">
+              <option>Default</option>
+              <option>Dark</option>
+              <option>Academy</option>
+            </select>
+            <label>Size</label>
+            <div class="size-grid">
+              <input value="900" aria-label="Width">
+              <input value="520" aria-label="Height">
+            </div>
+          </div>
+          <div class="apply-row">
+            <span></span>
+            <button class="apply">APPLY CHANGES</button>
+          </div>
+        </section>
+
+        <section class="panel payload">
+          <div class="panel-head">
+            <h2 class="panel-title">Payload</h2>
+            <span class="panel-hint">json</span>
+          </div>
+          <div class="editor">
+            <div class="line-numbers">1<br>2<br>3<br>4<br>5<br>6<br>7<br>8<br>9<br>10<br>11<br>12</div>
+            <textarea spellcheck="false">{
+  "type": "radar",
+  "response_format": "html",
+  "title": "Risk profile",
+  "width": 900,
+  "height": 520,
+  "theme": "default",
+  "data": [
+    { "group": "Token A", "name": "Liquidity", "value": 80 },
+    { "group": "Token B", "name": "Liquidity", "value": 55 }
+  ]
+}</textarea>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2 class="panel-title">Response</h2>
+            <span class="panel-hint">latest</span>
+          </div>
+          <div class="response">
+            <div class="metric">
+              <div class="metric-label">status</div>
+              <div class="metric-value ok">rendered</div>
+            </div>
+            <div class="metric">
+              <div class="metric-label">format</div>
+              <div class="metric-value">client-html</div>
+            </div>
+            <div class="metric">
+              <div class="metric-label">cache</div>
+              <div class="metric-value ok">hit</div>
+            </div>
+            <div class="metric">
+              <div class="metric-label">hash</div>
+              <div class="metric-value">sha256:e4bbb65...</div>
+            </div>
+          </div>
+        </section>
+      </aside>
+
+      <section class="preview">
+        <header class="preview-head">
+          <div class="artifact-title">
+            <h2>Risk profile</h2>
+            <p>Measured chart artifact preview</p>
+          </div>
+          <div class="artifact-tags">
+            <span class="tag">900 x 520</span>
+            <span class="tag">HTML</span>
+            <span class="tag">default</span>
+          </div>
+        </header>
+
+        <div class="stage">
+          <div class="corner"></div>
+          <div class="ruler-x"><span>0</span><span>240</span><span>480</span><span>720</span><span>900</span></div>
+          <div class="ruler-y"><span>0</span><span>160</span><span>320</span><span>520</span></div>
+          <div class="viewport">
+            <div class="artifact" role="img" aria-label="Chart artifact mock">
+              <div class="chart-title">
+                <h3>Risk profile</h3>
+                <p>Liquidity, volume, and risk comparison.</p>
+              </div>
+              <div class="legend">
+                <span>Token A</span>
+                <span>Token B</span>
+              </div>
+              <div class="plot">
+                <svg class="chart-svg" viewBox="0 0 776 304" aria-hidden="true">
+                  <polyline points="24,242 158,88 296,144 438,46 586,116 742,72" fill="none" stroke="#175cd3" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+                  <polyline points="24,266 158,158 296,104 438,136 586,80 742,150" fill="none" stroke="#13a89e" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+                  <g fill="#175cd3">
+                    <circle cx="24" cy="242" r="6"/>
+                    <circle cx="158" cy="88" r="6"/>
+                    <circle cx="296" cy="144" r="6"/>
+                    <circle cx="438" cy="46" r="6"/>
+                    <circle cx="586" cy="116" r="6"/>
+                    <circle cx="742" cy="72" r="6"/>
+                  </g>
+                  <g fill="#13a89e">
+                    <circle cx="24" cy="266" r="6"/>
+                    <circle cx="158" cy="158" r="6"/>
+                    <circle cx="296" cy="104" r="6"/>
+                    <circle cx="438" cy="136" r="6"/>
+                    <circle cx="586" cy="80" r="6"/>
+                    <circle cx="742" cy="150" r="6"/>
+                  </g>
+                </svg>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </section>
+  </main>
+</body>
+</html>
