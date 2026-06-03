@@ -34,6 +34,7 @@ npm run deploy
 ## API
 
 - `GET /health`: Worker health and runtime metadata.
+- `GET /`: lightweight landing page.
 - `GET /viewer`: browser viewer for editing payloads, rendering charts, and downloading JSON/SVG/PNG.
 - `GET /api`: published API documentation page. `GET /docs/api` is an alias.
 - `GET /logo.svg`, `GET /favicon.svg`: built-in brand assets.

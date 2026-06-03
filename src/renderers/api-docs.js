@@ -51,6 +51,7 @@ export function renderApiDocsHtml() {
           <h2>Endpoints</h2>
           <div class="endpoint-list">
             ${endpoint("GET", "/health", "Worker 健康检查和 runtime metadata。")}
+            ${endpoint("GET", "/", "简版落地宣传页，提供 Viewer 和 API 文档入口。")}
             ${endpoint("GET", "/viewer", "可编辑 payload、预览图表并下载 JSON/SVG/PNG 的浏览器页面。")}
             ${endpoint("GET", "/api", "当前 API 文档页面。/docs/api 是同一页面别名。")}
             ${endpoint("GET", "/logo.svg", "横版 SVG logo。")}
@@ -241,6 +242,7 @@ function apiDocsCss() {
       grid-template-columns: 210px minmax(0, 1fr);
       gap: 24px;
       padding: 28px 32px 56px;
+      min-width: 0;
     }
     .toc {
       position: sticky;
@@ -260,19 +262,29 @@ function apiDocsCss() {
       font-size: 13px;
     }
     .toc a:hover { background: #e8f1ff; color: var(--accent); }
-    .docs { display: grid; gap: 18px; min-width: 0; }
+    .docs {
+      display: grid;
+      gap: 18px;
+      min-width: 0;
+      max-width: 100%;
+      overflow: hidden;
+    }
     .panel {
+      min-width: 0;
+      max-width: 100%;
       padding: 24px;
       border: 1px solid var(--rule);
       border-radius: 8px;
       background: var(--panel);
       box-shadow: 0 1px 2px rgba(17, 24, 39, 0.06);
+      overflow: hidden;
     }
     h2 { margin: 0 0 16px; font-size: 24px; }
     h3 { margin: 20px 0 10px; font-size: 16px; }
     p { color: var(--slate); line-height: 1.65; }
     .endpoint-list { display: grid; gap: 10px; }
     .endpoint {
+      min-width: 0;
       display: grid;
       grid-template-columns: 70px 120px minmax(0, 1fr);
       align-items: center;
@@ -283,6 +295,10 @@ function apiDocsCss() {
       background: #fbfdff;
     }
     .endpoint p { margin: 0; }
+    .endpoint code {
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
     .method {
       display: inline-flex;
       justify-content: center;
@@ -297,11 +313,24 @@ function apiDocsCss() {
     .method.post { background: var(--signal); }
     table {
       width: 100%;
+      min-width: 680px;
       border-collapse: collapse;
       overflow: hidden;
       border: 1px solid var(--rule);
       border-radius: 8px;
       font-size: 14px;
+    }
+    .panel table {
+      display: block;
+      max-width: 100%;
+      overflow-x: auto;
+    }
+    .panel table thead,
+    .panel table tbody,
+    .panel table tr {
+      display: table;
+      width: 100%;
+      table-layout: fixed;
     }
     th, td {
       padding: 12px;
@@ -329,6 +358,7 @@ function apiDocsCss() {
       background: #e8f1ff;
     }
     pre {
+      max-width: 100%;
       overflow: auto;
       padding: 16px;
       border-radius: 8px;
@@ -336,6 +366,12 @@ function apiDocsCss() {
       color: #dbeafe;
       font-size: 13px;
       line-height: 1.6;
+    }
+    pre code {
+      display: block;
+      width: max-content;
+      min-width: 100%;
+      white-space: pre;
     }
     @media (max-width: 860px) {
       .nav { height: auto; padding: 16px; align-items: flex-start; flex-direction: column; }

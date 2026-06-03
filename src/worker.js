@@ -1,6 +1,7 @@
 import { FAVICON_SVG, LOGO_SVG } from "./assets.js";
 import { renderApiDocsHtml } from "./renderers/api-docs.js";
 import { renderChartHtml, renderViewerHtml } from "./renderers/html-shell.js";
+import { renderLandingHtml } from "./renderers/landing-page.js";
 import { canRenderSvg, renderSvg, SIMPLE_SVG_TYPES } from "./renderers/svg.js";
 
 const SERVICE_NAME = "chart-renderer";
@@ -25,6 +26,15 @@ export default {
   async fetch(request, env) {
     try {
       const url = new URL(request.url);
+
+      if (request.method === "GET" && url.pathname === "/") {
+        return new Response(renderLandingHtml(), {
+          status: 200,
+          headers: {
+            "Content-Type": "text/html; charset=utf-8"
+          }
+        });
+      }
 
       if (request.method === "GET" && url.pathname === "/health") {
         return jsonResponse(200, {

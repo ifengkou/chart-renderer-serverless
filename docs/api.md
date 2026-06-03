@@ -11,6 +11,7 @@ CHART-001 Node.js PNG SSR API 已标记为 legacy。旧的 `image_base64` 和 `i
 ## 快速结论
 
 - Base URL：`http://127.0.0.1:8787`，容器网络内通常使用服务名和端口，例如 `http://chart-renderer:8787`。
+- 落地宣传页：`GET /`。
 - 健康检查：`GET /health`。
 - 在线 API 文档：`GET /api`，别名 `GET /docs/api`。
 - 渲染图表：`POST /render`。

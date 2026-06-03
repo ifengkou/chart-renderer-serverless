@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { renderApiDocsHtml } from "./renderers/api-docs.js";
 import { renderChartHtml, renderViewerHtml } from "./renderers/html-shell.js";
+import { renderLandingHtml } from "./renderers/landing-page.js";
 
 const chart = {
   type: "radar",
@@ -62,5 +63,15 @@ assert.match(apiDocs, /href="\/viewer"/);
 assert.match(apiDocs, /POST \/render/);
 assert.match(apiDocs, /\/docs\/api/);
 assert.match(apiDocs, /response_format=png/);
+assert.match(apiDocs, /\.panel \{[\s\S]*max-width: 100%/);
+assert.match(apiDocs, /\.panel table \{[\s\S]*overflow-x: auto/);
 
-console.log(JSON.stringify({ success: true, html_cases: 3 }));
+const landing = renderLandingHtml();
+assert.match(landing, /^<!doctype html>/);
+assert.match(landing, /Render charts without server-side canvas/);
+assert.match(landing, /href="\/viewer"/);
+assert.match(landing, /href="\/api"/);
+assert.match(landing, /src="\/logo\.svg"/);
+assert.match(landing, /POST \/render/);
+
+console.log(JSON.stringify({ success: true, html_cases: 4 }));

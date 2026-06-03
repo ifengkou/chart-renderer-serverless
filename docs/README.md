@@ -20,6 +20,7 @@ The current service does not generate PNG on the server. It validates chart payl
 已完成：
 
 - `src/worker.js` 提供 Cloudflare Worker 入口。
+- `GET /` 返回简版落地宣传页。
 - `GET /health` 返回 Worker runtime metadata。
 - `GET /viewer` 由 Worker 直接返回浏览器 viewer。
 - `GET /api` 和 `GET /docs/api` 由 Worker 直接返回 API 文档页面。
